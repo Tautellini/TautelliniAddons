@@ -1,0 +1,8 @@
+## Interface: 16001
+## Title: Forever Addon Template
+## Notes: Starting point for a WoW Forever addon
+## Author: Tautellini
+## Version: @project-version@
+## SavedVariables: ForeverAddonTemplateDB
+
+ForeverAddonTemplate.lua
