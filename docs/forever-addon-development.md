@@ -184,6 +184,14 @@ Blizzard's minimap sun and moon icon uses both (`Blizzard_Minimap/Camelot/Diel.l
 - Use secure templates such as `SecureActionButtonTemplate` for anything that casts, targets or uses items.
 - If a Blizzard panel starts throwing errors after your addon touches it, suspect taint. `/console taintLog 1` writes details to `Logs\taint.log`.
 
+### Full-screen tint layers
+
+Findings from WorldLight, tested in game on Forever:
+
+- The `Gamma` setting changes the UI as well as the world. Expect the same from `Brightness` and `Contrast`.
+- A frame parented to `WorldFrame` with strata `BACKGROUND` and frame level 0 draws over the 3D world and under the UI.
+- Texture blend modes are `DISABLE`, `BLEND`, `ALPHAKEY`, `ADD` and `MOD`. `SetVertexColor` is clamped to 1, so `MOD` can only darken. Brightening with a layer always lifts black and looks washed out. A colored light (for example a cool moonlight) hides that better than white.
+
 ### Performance
 
 - Prefer events and `C_Timer` over `OnUpdate`. Throttle `OnUpdate` when you cannot avoid it.

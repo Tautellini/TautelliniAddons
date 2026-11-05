@@ -24,6 +24,8 @@ function ns.RegisterSettings(db, onChange)
         "Brightness of the world during the day. Negative values darken, positive values brighten, 0 leaves it unchanged.")
     Slider("night", "Night brightness", 5,
         "Brightness of the world at night. Negative values darken, positive values brighten, 0 leaves it unchanged.")
+    Settings.CreateColorSwatch(category, Register("lightColor", "Light color"),
+        "Color of the light added when brightening. The default cool moonlight looks less foggy than white. Pick white for a neutral lift.")
     Slider("fadeMinutes", "Fade length (minutes)", 15,
         "How long the change takes after the server switches between day and night. 0 switches at once.")
 

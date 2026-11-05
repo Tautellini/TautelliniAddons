@@ -28,6 +28,7 @@ local function Update()
     ns.value = db.enabled and ns.ComputeValue(ns.isDay, GetServerTime(), db.lastFlip, db) or 0
     local darkAlpha, lightAlpha = ns.ToAlphas(ns.value)
     dark:SetAlpha(darkAlpha)
+    light:SetColorTexture(ns.ParseColor(db.lightColor))
     light:SetAlpha(lightAlpha)
 end
 

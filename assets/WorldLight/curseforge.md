@@ -28,6 +28,7 @@ You can still set Gamma once to suit your monitor. WorldLight adds the day and n
 ### Features
 
 - Separate brightness for day and night, from -100 (darker) to +100 (brighter)
+- Brightening uses a cool moonlight color by default, so nights look moonlit instead of foggy. Pick any color you like in the settings.
 - Follows the server's own day and night, the same signal that drives the sun and moon icon on the minimap, so it matches your region
 - Smooth fade between day and night, with adjustable length
 - Turns itself off indoors and in dungeons and raids, where the game has no day or night
@@ -52,6 +53,10 @@ You can still set Gamma once to suit your monitor. WorldLight adds the day and n
 
 Bug reports and ideas are welcome at https://github.com/Tautellini/TautelliniAddons/issues
 
+## Changelog for 1.0.1
+
+- New: Light color setting with Blizzard's color picker. Brightening now uses a cool moonlight color by default, which looks less foggy than white. Choose white to get the old look back.
+
 ## Changelog for 1.0.0
 
 First release.
@@ -68,8 +73,8 @@ Version 1.0.0 was tested in game and uploaded on 2026-11-05.
 
 | Field | Value |
 |---|---|
-| File | `.release/WorldLight-1.0.0.zip` |
-| Display name | WorldLight 1.0.0 |
+| File | `.release/WorldLight-1.0.1.zip` |
+| Display name | WorldLight 1.0.1 |
 | Game version | WoW Forever 1.60.1 |
-| Release type | Release |
+| Release type | Release (1.0.1 tested in game on 2026-11-05) |
 | Category | Miscellaneous |

@@ -43,4 +43,13 @@ assert(d == 0 and l == 0)
 local broken = ns.Sanitize({ enabled = "yes", day = 500, night = -500, fadeMinutes = "long" })
 assert(broken.enabled == true and broken.day == 100 and broken.night == -100 and broken.fadeMinutes == 60)
 
+-- Light color: default moonlight parses, broken colors fall back, valid custom colors stay
+local r, g, b = ns.ParseColor(ns.defaults.lightColor)
+assert(r == 191 / 255 and g == 217 / 255 and b == 1)
+assert(ns.Sanitize({ lightColor = "blue" }).lightColor == ns.defaults.lightColor)
+assert(ns.Sanitize({ lightColor = 42 }).lightColor == ns.defaults.lightColor)
+assert(ns.Sanitize({ lightColor = "FF00ff80" }).lightColor == "FF00ff80")
+r, g, b = ns.ParseColor("FF00ff80")
+assert(r == 0 and g == 1 and b == 128 / 255)
+
 print("compute_test: all passed")

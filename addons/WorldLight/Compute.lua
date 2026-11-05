@@ -7,6 +7,8 @@ ns.defaults = {
     day = 0,
     night = 30,
     fadeMinutes = 60,
+    -- Color of the added light, as AARRGGBB hex like Blizzard's color swatch stores it. Default is a cool moonlight.
+    lightColor = "ffbfd9ff",
 }
 
 ns.ranges = {
@@ -27,7 +29,7 @@ end
 -- Replaces missing or broken saved values with defaults and keeps numbers in range
 function ns.Sanitize(db)
     for key, default in pairs(ns.defaults) do
-        if type(db[key]) ~= type(default) then
+        if type(db[key]) ~= type(default) or (key == "lightColor" and not db[key]:match("^%x%x%x%x%x%x%x%x$")) then
             db[key] = default
         elseif ns.ranges[key] then
             db[key] = ns.Clamp(key, db[key])
@@ -52,7 +54,12 @@ function ns.ComputeValue(isDay, now, lastFlip, db)
     return from + (target - from) * progress
 end
 
--- Negative values darken with a black layer, positive values brighten with an additive white layer
+-- Returns r, g, b from 0 to 1 for an AARRGGBB hex string
+function ns.ParseColor(hex)
+    return tonumber(hex:sub(3, 4), 16) / 255, tonumber(hex:sub(5, 6), 16) / 255, tonumber(hex:sub(7, 8), 16) / 255
+end
+
+-- Negative values darken with a black layer, positive values brighten with an additive light layer
 function ns.ToAlphas(value)
     if value < 0 then
         return -value / 100 * ns.MAX_DARKEN, 0
