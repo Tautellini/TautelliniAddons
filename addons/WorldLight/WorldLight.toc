@@ -2,7 +2,7 @@
 ## Title: WorldLight
 ## Notes: Brightens or darkens the game world by day and night. The UI stays untouched.
 ## Author: Tautellini
-## Version: 1.0.1
+## Version: 1.0.2
 ## SavedVariables: WorldLightDB
 
 Compute.lua

@@ -28,6 +28,12 @@ function ns.RegisterSettings(db, onChange)
         "Color of the light added when brightening. The default cool moonlight looks less foggy than white. Pick white for a neutral lift.")
     Slider("fadeMinutes", "Fade length (minutes)", 15,
         "How long the change takes after the server switches between day and night. 0 switches at once.")
+    Settings.CreateCheckbox(category, Register("tintIndoors", "Tint indoors"),
+        "Keep the tint inside buildings and caves. Off by default, because there is no day or night indoors.")
+    Settings.CreateCheckbox(category, Register("tintInstances", "Tint in instances"),
+        "Keep the tint in dungeons, raids and other instances. Off by default, because instances have their own fixed lighting.")
+    Slider("placeFadeSeconds", "Indoor fade (seconds)", 0.5,
+        "How long the tint takes to fade out or back in when you enter or leave a building or instance. 0 switches at once.")
 
     Settings.RegisterAddOnCategory(category)
     ns.category = category

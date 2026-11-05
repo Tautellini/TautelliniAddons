@@ -52,4 +52,22 @@ assert(ns.Sanitize({ lightColor = "FF00ff80" }).lightColor == "FF00ff80")
 r, g, b = ns.ParseColor("FF00ff80")
 assert(r == 0 and g == 1 and b == 128 / 255)
 
+-- Where the tint shows. In an instance only the instance setting counts.
+local place = ns.Sanitize({})
+assert(ns.ShowsTint(false, false, place) == true)
+assert(ns.ShowsTint(true, false, place) == false)
+assert(ns.ShowsTint(false, true, place) == false)
+assert(ns.ShowsTint(true, true, place) == false)
+place.tintIndoors = true
+assert(ns.ShowsTint(true, false, place) == true)
+assert(ns.ShowsTint(true, true, place) == false)
+place.tintInstances = true
+place.tintIndoors = false
+assert(ns.ShowsTint(true, true, place) == true)
+assert(ns.ShowsTint(true, false, place) == false)
+
+-- New settings get defaults and the fade is clamped
+local fresh = ns.Sanitize({ placeFadeSeconds = 99, tintIndoors = "yes" })
+assert(fresh.placeFadeSeconds == 10 and fresh.tintIndoors == false and fresh.tintInstances == false)
+
 print("compute_test: all passed")

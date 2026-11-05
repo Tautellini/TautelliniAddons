@@ -9,12 +9,16 @@ ns.defaults = {
     fadeMinutes = 60,
     -- Color of the added light, as AARRGGBB hex like Blizzard's color swatch stores it. Default is a cool moonlight.
     lightColor = "ffbfd9ff",
+    tintIndoors = false,
+    tintInstances = false,
+    placeFadeSeconds = 2,
 }
 
 ns.ranges = {
     day = { -100, 100 },
     night = { -100, 100 },
     fadeMinutes = { 0, 180 },
+    placeFadeSeconds = { 0, 10 },
 }
 
 -- shortcut: strongest tint at -100 and +100 is a guess, tune it in game
@@ -52,6 +56,15 @@ function ns.ComputeValue(isDay, now, lastFlip, db)
     end
     local from = isDay and db.night or db.day
     return from + (target - from) * progress
+end
+
+-- Whether the tint shows at the player's location. In an instance only the instance
+-- setting counts, because most dungeons are also indoors.
+function ns.ShowsTint(indoors, inInstance, db)
+    if inInstance then
+        return db.tintInstances
+    end
+    return db.tintIndoors or not indoors
 end
 
 -- Returns r, g, b from 0 to 1 for an AARRGGBB hex string

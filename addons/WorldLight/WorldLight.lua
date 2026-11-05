@@ -1,7 +1,6 @@
 local addonName, ns = ...
 
 local TICK_SECONDS = 10
-local INDOOR_FADE_SECONDS = 1
 
 ns.settings = {}
 
@@ -32,25 +31,26 @@ local function Update()
     light:SetAlpha(lightAlpha)
 end
 
--- Indoors and in instances there is no day or night, so the tint fades out there
-local outdoor, outdoorTarget = 1, 1
+-- Indoors and in instances there is no day or night, so by default the tint fades out there
+local shown, shownTarget = 1, 1
 
 local function FadeStep(self, elapsed)
-    local step = elapsed / INDOOR_FADE_SECONDS
-    if outdoor < outdoorTarget then
-        outdoor = math.min(outdoorTarget, outdoor + step)
+    local seconds = ns.db.placeFadeSeconds
+    local step = seconds > 0 and elapsed / seconds or 1
+    if shown < shownTarget then
+        shown = math.min(shownTarget, shown + step)
     else
-        outdoor = math.max(outdoorTarget, outdoor - step)
+        shown = math.max(shownTarget, shown - step)
     end
-    self:SetAlpha(outdoor)
-    if outdoor == outdoorTarget then
+    self:SetAlpha(shown)
+    if shown == shownTarget then
         self:SetScript("OnUpdate", nil)
     end
 end
 
-local function UpdateOutdoor()
-    outdoorTarget = (IsIndoors() or IsInInstance()) and 0 or 1
-    if outdoor ~= outdoorTarget then
+local function UpdatePlace()
+    shownTarget = ns.ShowsTint(IsIndoors(), IsInInstance(), ns.db) and 1 or 0
+    if shown ~= shownTarget then
         overlay:SetScript("OnUpdate", FadeStep)
     end
 end
@@ -64,13 +64,20 @@ function events:ADDON_LOADED(name)
     if name ~= addonName then return end
     WorldLightDB = ns.Sanitize(WorldLightDB or {})
     ns.db = WorldLightDB
-    ns.RegisterSettings(ns.db, Update)
+    ns.RegisterSettings(ns.db, function()
+        Update()
+        UpdatePlace()
+    end)
     self:UnregisterEvent("ADDON_LOADED")
 end
 
 function events:PLAYER_LOGIN()
     Update()
-    C_Timer.NewTicker(TICK_SECONDS, Update)
+    -- Also re-checks the location in case no event fired for a building transition
+    C_Timer.NewTicker(TICK_SECONDS, function()
+        Update()
+        UpdatePlace()
+    end)
 end
 
 function events:DIEL_CYCLE_CHANGED(isDayTime)
@@ -82,14 +89,18 @@ function events:DIEL_CYCLE_CHANGED(isDayTime)
     Update()
 end
 
-events.PLAYER_ENTERING_WORLD = UpdateOutdoor
-events.ZONE_CHANGED = UpdateOutdoor
-events.ZONE_CHANGED_INDOORS = UpdateOutdoor
-events.ZONE_CHANGED_NEW_AREA = UpdateOutdoor
+events.PLAYER_ENTERING_WORLD = UpdatePlace
+events.ZONE_CHANGED = UpdatePlace
+events.ZONE_CHANGED_INDOORS = UpdatePlace
+events.ZONE_CHANGED_NEW_AREA = UpdatePlace
+-- Walking into a building changes no zone. These two fire there, the minimap uses them too.
+events.NEW_WMO_CHUNK = UpdatePlace
+events.MINIMAP_UPDATE_ZOOM = UpdatePlace
 
 for event in pairs({
     ADDON_LOADED = true, PLAYER_LOGIN = true, DIEL_CYCLE_CHANGED = true, PLAYER_ENTERING_WORLD = true,
     ZONE_CHANGED = true, ZONE_CHANGED_INDOORS = true, ZONE_CHANGED_NEW_AREA = true,
+    NEW_WMO_CHUNK = true, MINIMAP_UPDATE_ZOOM = true,
 }) do
     events:RegisterEvent(event)
 end
@@ -97,9 +108,11 @@ end
 local function PrintStatus()
     local hour, minute = GetGameTime()
     local flip = ns.db.lastFlip
-    print(("WorldLight: %s, realm time %02d:%02d, %s, value %.0f, %s%s"):format(
+    local indoors, inInstance = IsIndoors(), IsInInstance()
+    print(("WorldLight: %s, realm time %02d:%02d, %s, value %.0f, %s%s%s"):format(
         ns.db.enabled and "on" or "off", hour, minute, ns.isDay and "day" or "night", ns.value or 0,
-        (IsIndoors() or IsInInstance()) and "indoors or in an instance" or "outdoors",
+        inInstance and "in an instance" or indoors and "indoors" or "outdoors",
+        ns.ShowsTint(indoors, inInstance, ns.db) and "" or ", tint off here",
         flip and flip.realmTime and (", last switch to %s at %s"):format(flip.isDay and "day" or "night", flip.realmTime) or ""))
 end
 

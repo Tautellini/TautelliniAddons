@@ -1,6 +1,6 @@
 # WorldLight
 
-Status: v1 tested in game and released as 1.0.0 on CurseForge (2026-11-05). 1.0.1 with the light color tested in game (2026-11-05). Target client: WoW Forever (Interface 16001).
+Status: v1 tested in game and released as 1.0.0 on CurseForge (2026-11-05). 1.0.1 with the light color tested in game (2026-11-05). 1.0.2 fixes the indoor check for buildings, not yet tested in game. Target client: WoW Forever (Interface 16001).
 
 ## Goal
 
@@ -30,7 +30,7 @@ In v1:
 - One brightness value for day and one for night. Both are configurable in either direction.
 - Smooth fade between the two values after the server switches between day and night.
 - Configurable fade length.
-- No tint indoors and inside instances. The tint fades back in outside.
+- No tint indoors and inside instances by default, with a short fade. Since 1.0.2 both can be turned on, and the fade length is configurable.
 - Settings in Blizzard's own panel (Options > AddOns) and slash commands for quick changes.
 - Settings are saved account-wide.
 
@@ -50,7 +50,8 @@ Brightness values go from -100 (darker) to +100 (brighter). 0 means no change.
 - During the day the world uses the day value. At night it uses the night value.
 - When the server flips, the value blends linearly from the old phase value to the new one over the fade length.
 - A `/reload` or relog during a fade resumes the fade at the right point, because the time of the last switch is saved.
-- Indoors (`IsIndoors()`, this includes cities like Ironforge) and in instances (`IsInInstance()`), the tint fades out over one second. It fades back in when the player is outside again.
+- Indoors (`IsIndoors()`) and in instances (`IsInInstance()`), the tint fades out over the indoor fade length (default 2 seconds). It fades back in when the player is outside again.
+- "Tint indoors" and "Tint in instances" keep the tint on there. In an instance only "Tint in instances" counts, because most dungeons are also indoors.
 - The UI is never tinted. That covers action bars, unit frames, chat, minimap, world map, menus and tooltips.
 - Hiding the UI with Alt+Z keeps the tint, because it belongs to the world picture.
 - Changes in the settings panel or by slash command apply at once.
@@ -87,7 +88,7 @@ Brightness values go from -100 (darker) to +100 (brighter). 0 means no change.
 - On `PLAYER_LOGIN` the addon reads `C_DateAndTime.IsDayTime()` and starts a 10 second ticker.
 - On `DIEL_CYCLE_CHANGED` it saves `{ time, isDay, realmTime }` as `lastFlip`, but only if the state really changed. An event that repeats the current state does not start a fade.
 - `ns.ComputeValue(isDay, now, lastFlip, db)` returns the current value. It is pure and covered by the test.
-- `PLAYER_ENTERING_WORLD`, `ZONE_CHANGED`, `ZONE_CHANGED_INDOORS` and `ZONE_CHANGED_NEW_AREA` re-check the indoor and instance state. The one second fade runs in an `OnUpdate` that removes itself when done.
+- `PLAYER_ENTERING_WORLD`, `ZONE_CHANGED`, `ZONE_CHANGED_INDOORS` and `ZONE_CHANGED_NEW_AREA` re-check the indoor and instance state. Walking into a building (for example a bank) changes no zone, so none of these fire there. Since 1.0.2, `NEW_WMO_CHUNK` and `MINIMAP_UPDATE_ZOOM` also trigger the check, the same events the minimap uses to switch to its indoor view, and the 10 second ticker re-checks as a fallback. The indoor fade runs in an `OnUpdate` that removes itself when done. `ns.ShowsTint(indoors, inInstance, db)` decides where the tint shows and is covered by the test.
 
 ### Restrictions
 
@@ -103,12 +104,15 @@ Brightness values go from -100 (darker) to +100 (brighter). 0 means no change.
 | Night brightness | -100 to 100, steps of 5 | 30 |
 | Fade length | 0 to 180 minutes, steps of 15 | 60 |
 | Light color (since 1.0.1) | any color, Blizzard color picker, stored as `AARRGGBB` hex | `ffbfd9ff`, a cool moonlight |
+| Tint indoors (since 1.0.2) | on or off | off |
+| Tint in instances (since 1.0.2) | on or off | off |
+| Indoor fade (since 1.0.2) | 0 to 10 seconds, steps of 0.5 | 2 |
 
 The light color is used whenever the value is positive. White light lifts every pixel evenly and reads as grey fog. A cool blue-white reads as moonlight, which looks like lighting instead of haze.
 
 ## Performance
 
-One small computation every 10 seconds and a one second fade on indoor changes. No per-frame work in normal play.
+One small computation every 10 seconds and a short fade on indoor changes. No per-frame work in normal play.
 
 ## Failure modes
 

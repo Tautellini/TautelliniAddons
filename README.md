@@ -10,7 +10,7 @@ Forever runs on the modern Midnight client with TOC Interface `16001`, not on a 
 |---|---|
 | `addons/<Name>/` | one folder per addon, named exactly like its `.toc` file |
 | `addons/WorldLight/` | tints the 3D world by day and night without touching the UI. Version 1.0.0 is on CurseForge ([spec](docs/plans/worldlight.md)) |
-| `assets/<Name>/` | logo and CurseForge texts per addon, not shipped in the addon zip |
+| `assets/<Name>/` | logo, live CurseForge description (`curseforge.md`) and `CHANGELOG.md` per addon, not shipped in the addon zip |
 | `tests/<Name>/` | plain Lua tests, run from the repo root with `lua tests/<Name>/<file>.lua` |
 | `templates/ForeverAddonTemplate/` | minimal working addon to copy from |
 | `docs/forever-addon-development.md` | client facts, TOC rules, secret values, best practices, releasing |
