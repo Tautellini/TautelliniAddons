@@ -9,6 +9,8 @@ Forever runs on the modern Midnight client with TOC Interface `16001`, not on a 
 | Path | Content |
 |---|---|
 | `addons/<Name>/` | one folder per addon, named exactly like its `.toc` file |
+| `addons/WorldLight/` | tints the 3D world by day and night without touching the UI ([spec](docs/plans/worldlight.md)) |
+| `tests/<Name>/` | plain Lua tests, run from the repo root with `lua tests/<Name>/<file>.lua` |
 | `templates/ForeverAddonTemplate/` | minimal working addon to copy from |
 | `docs/forever-addon-development.md` | client facts, TOC rules, secret values, best practices, releasing |
 | `.luacheckrc` | lint configuration for all addons |

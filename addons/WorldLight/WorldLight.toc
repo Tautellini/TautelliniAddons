@@ -1,0 +1,10 @@
+## Interface: 16001
+## Title: WorldLight
+## Notes: Brightens or darkens the game world by day and night. The UI stays untouched.
+## Author: Tautellini
+## Version: @project-version@
+## SavedVariables: WorldLightDB
+
+Compute.lua
+Settings.lua
+WorldLight.lua

@@ -7,6 +7,8 @@ ignore = { "212/self" }
 globals = {
     "ForeverAddonTemplateDB",
     "SLASH_FOREVERADDONTEMPLATE1",
+    "WorldLightDB",
+    "SLASH_WORLDLIGHT1",
     "SlashCmdList",
 }
 
@@ -15,6 +17,8 @@ read_globals = {
     "CreateFrame", "GetBuildInfo", "InCombatLockdown", "hooksecurefunc",
     "C_Timer", "C_ChatInfo", "C_DamageMeter", "C_CurveUtil", "C_DurationUtil",
     "UnitHealth", "UnitHealthMax", "Enum", "Item",
+    "WorldFrame", "C_DateAndTime", "GetServerTime", "GetGameTime", "IsIndoors", "IsInInstance",
+    "Settings", "MinimalSliderWithSteppersMixin",
     "issecretvalue", "hasanysecretvalues", "issecrettable",
     "canaccessvalue", "canaccesstable", "canaccesssecrets", "scrubsecretvalues",
     "WOW_PROJECT_ID", "WOW_PROJECT_MAINLINE", "WOW_PROJECT_CAMELOT",

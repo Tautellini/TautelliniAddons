@@ -22,7 +22,7 @@ This has three consequences.
 | TOC game type | `forever`, alias `camelot` | Warcraft Wiki TOC_format |
 | TOC game family | `mainline` | Warcraft Wiki TOC_format |
 | Launch build | `1.60.1.70790` | wow-ui-source `forever` branch |
-| Install folder | reported as `_forever_` (verify) | press guide. The beta used `_classic_beta_` |
+| Install folder | `_forever_` inside the WoW folder, for example `C:\World of Warcraft\_forever_` | Windows registry `GamePath` of an installed client. The beta used `_classic_beta_` |
 | CurseForge version filter | `gameVersionTypeId=88568` | CurseForge file links |
 
 Check your own client in game:
@@ -149,6 +149,15 @@ Test where secrets actually appear. A test run alone in a city proves nothing. B
 - `C_PvP.IsWarModeFeatureEnabled` returns false.
 - `GetInspectHonorData` returns two extra values: current honor and honor needed for the next level.
 - Lua `require` is renamed to `import`.
+
+## Forever-only APIs
+
+| API | What it does |
+|---|---|
+| `C_DateAndTime.IsDayTime()` | true while it is day in the game world |
+| `DIEL_CYCLE_CHANGED` event, payload `isDayTime` | fires when the world switches between day and night |
+
+Blizzard's minimap sun and moon icon uses both (`Blizzard_Minimap/Camelot/Diel.lua`). The day and night cycle follows the realm clock, one real hour per game hour, with one clock per region. Use the server flag instead of guessing hours from `GetGameTime()`. WorldLight in this repo is a working example.
 
 ## UI and content differences from Midnight
 
