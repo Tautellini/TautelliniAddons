@@ -1,6 +1,6 @@
 # WorldLight
 
-Status: v1 implemented, not yet tested in game. Target client: WoW Forever (Interface 16001).
+Status: v1 tested in game and released as 1.0.0 on CurseForge (2026-11-05). Target client: WoW Forever (Interface 16001).
 
 ## Goal
 
@@ -128,6 +128,8 @@ One small computation every 10 seconds and a one second fade on indoor changes. 
 4. Is +30 a good night default?
 
 ## Done criteria
+
+Tested in game by the user before the 1.0.0 release.
 
 - Loads on Forever without Lua errors (BugSack stays empty).
 - UI elements stay unchanged at both -100 and +100. Check with screenshots.
