@@ -1,6 +1,6 @@
 # WorldLight
 
-Status: v1 tested in game and released as 1.0.0 on CurseForge (2026-11-05). 1.0.1 with the light color tested in game (2026-11-05). 1.0.2 fixes the indoor check for buildings, not yet tested in game. Target client: WoW Forever (Interface 16001).
+Status: v1 tested in game and released as 1.0.0 on CurseForge (2026-11-05). 1.0.1 with the light color tested in game (2026-11-05). 1.0.2 with the indoor fix and the indoor and instance settings tested in game and uploaded (2026-11-05). Target client: WoW Forever (Interface 16001).
 
 ## Goal
 

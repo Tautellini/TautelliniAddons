@@ -190,7 +190,7 @@ Findings from WorldLight, tested in game on Forever:
 
 - The `Gamma` setting changes the UI as well as the world. Expect the same from `Brightness` and `Contrast`.
 - A frame parented to `WorldFrame` with strata `BACKGROUND` and frame level 0 draws over the 3D world and under the UI.
-- `IsIndoors()` tells you whether the player is inside, but entering a building often changes no zone, so the `ZONE_CHANGED` events do not fire. Listen to `NEW_WMO_CHUNK` and `MINIMAP_UPDATE_ZOOM` as well, which Blizzard's minimap code uses. Not yet confirmed in game, so keep a timer as a fallback.
+- `IsIndoors()` tells you whether the player is inside, but entering a building often changes no zone, so the `ZONE_CHANGED` events do not fire. Listen to `NEW_WMO_CHUNK` and `MINIMAP_UPDATE_ZOOM` as well, which Blizzard's minimap code uses. WorldLight 1.0.2 listens to both and re-checks every 10 seconds as a fallback, and that works in game.
 - Texture blend modes are `DISABLE`, `BLEND`, `ALPHAKEY`, `ADD` and `MOD`. `SetVertexColor` is clamped to 1, so `MOD` can only darken. Brightening with a layer always lifts black and looks washed out. A colored light (for example a cool moonlight) hides that better than white.
 
 ### Performance
