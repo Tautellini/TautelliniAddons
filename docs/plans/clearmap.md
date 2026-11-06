@@ -1,6 +1,6 @@
 # ClearMap
 
-Status: pipeline spike in progress (2026-11-06). Durotar renders with ground, cliffs, water, roads, forests, buildings, bridges, cave outlines and cave entrances. Drop-down edges and large obstacles are still missing. No addon code yet. Target client: WoW Forever (Interface 16001). "ClearMap" is a working name.
+Status: pipeline spike in progress (2026-11-06). Durotar renders with ground, cliffs, water, roads, forests, buildings, bridges, cave outlines and cave entrances. Drop-down edges and large obstacles are still missing. First addon build (tile swap, hidden explored overlays, toggle button, `/clearmap`) tested in game on 2026-11-06 with Durotar, the user reported "lgtm". Labels, cave pins and the minimap are not built yet. Target client: WoW Forever (Interface 16001). "ClearMap" is a working name.
 
 ## Goal
 
@@ -114,7 +114,12 @@ TACTTool.exe -p wowf -r eu -d "C:/World of Warcraft" -m fdid -i 782779 -o extrac
 py -3.13 <repo>/tools/mapgen/wdt.py extract/kalimdor.wdt db2/UiMapAssignment.csv 1411 kalimdor durotar.txt
 TACTTool.exe -p wowf -r eu -d "C:/World of Warcraft" -m list -i durotar.txt -o extract/kalimdor
 py -3.13 <repo>/tools/mapgen/preview.py 1411 C:/dev/mapgen-data preview/durotar.png
+py -3.13 <repo>/tools/mapgen/export.py 1411 C:/dev/mapgen-data <repo>/addons/ClearMap
 ```
+
+`export.py` writes 32-bit TGA tiles to `addons/ClearMap/Tiles/<uiMapID>/` and regenerates `Tiles/Tiles.lua`. The `Tiles` folder is gitignored, so a fresh clone needs this step before the addon loads. The addon is linked into the game with a junction at `C:\World of Warcraft\_forever_\Interface\AddOns\ClearMap`. Tile files are cached by the client, so a re-export may need a full restart to show.
+
+Known limit: the addon draws its grid on every detail layer of a map. Zone maps have one layer. Fix this before continent maps get tiles.
 
 Facts confirmed in the spike:
 

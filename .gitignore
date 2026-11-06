@@ -13,3 +13,4 @@ desktop.ini
 # mapgen pipeline
 __pycache__/
 cache/
+addons/ClearMap/Tiles/

@@ -1,0 +1,9 @@
+## Interface: 16001
+## Title: ClearMap
+## Notes: Clean world map tiles generated from the game's terrain
+## Author: Tautellini
+## Version: @project-version@
+## SavedVariables: ClearMapDB
+
+Tiles\Tiles.lua
+ClearMap.lua

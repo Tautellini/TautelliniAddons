@@ -9,6 +9,8 @@ globals = {
     "SLASH_FOREVERADDONTEMPLATE1",
     "WorldLightDB",
     "SLASH_WORLDLIGHT1",
+    "ClearMapDB",
+    "SLASH_CLEARMAP1",
     "SlashCmdList",
 }
 
@@ -19,6 +21,7 @@ read_globals = {
     "UnitHealth", "UnitHealthMax", "Enum", "Item",
     "WorldFrame", "C_DateAndTime", "GetServerTime", "GetGameTime", "IsIndoors", "IsInInstance",
     "Settings", "MinimalSliderWithSteppersMixin",
+    "WorldMapFrame", "C_Map",
     "issecretvalue", "hasanysecretvalues", "issecrettable",
     "canaccessvalue", "canaccesstable", "canaccesssecrets", "scrubsecretvalues",
     "WOW_PROJECT_ID", "WOW_PROJECT_MAINLINE", "WOW_PROJECT_CAMELOT",

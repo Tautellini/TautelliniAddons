@@ -258,8 +258,12 @@ def build(ui_map_id, data_dir):
                 forest[r, c] += 1
     forest = (ndimage.gaussian_filter(forest, FOREST_SIGMA_CELLS) > FOREST_DENSITY) & ~water
 
+    # Exact map region inside the rendered image, in output pixels (the image starts at cell r0, c0).
+    px = SS / 2
+    box = (((oy - max_y) / UNIT - c0) * px, ((ox - max_x) / UNIT - r0) * px, ((oy - min_y) / UNIT - c0) * px, ((ox - min_x) / UNIT - r0) * px)
+
     return {"steep": steep & ~water, "water": water, "in_zone": in_zone, "road": road, "forest": forest,
-            "entrances": entrances, **geo}
+            "entrances": entrances, "box": box, **geo}
 
 
 def render(masks, style):
