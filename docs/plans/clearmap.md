@@ -128,6 +128,17 @@ For all maps: `wdt.py <wdt> <csv> all <map> tiles-<map>.txt extract/<map>` lists
 
 Each map is rendered at about 2560 pixels across before it is resampled to the 2048-pixel tile grid. The supersampling factor is picked per map (2 for the Barrens, 4 for Durotar, up to 8 for small cities), so line weights look the same on every map.
 
+### Checking the addon without the game
+
+luacheck is not installed, so two checks stand in before every in-game test:
+
+```
+py -3.13 tools/luasyntax.py addons/ClearMap/*.lua addons/ClearMap/Tiles/Tiles.lua
+"C:/Program Files/MiKTeX/miktex/bin/x64/luatex.exe" --luaonly tools/wowmock.lua addons/ClearMap
+```
+
+`luasyntax.py` parses Lua 5.1 syntax and has a self-test (`--selftest`). `wowmock.lua` runs the addon under LuaTeX's Lua with stubbed WoW APIs: load, settings migration, world map refresh in every label mode, every option on and off, a map without tiles, the map menu, cave tooltips, the minimap update, a mask change from a minimap addon, the indoor fallback and the slash command. Planted bugs in the label, minimap and tile code paths all make it fail. It cannot find mismatches with the real WoW API. Those still need the game.
+
 Facts confirmed in the spike:
 
 - Kalimdor is map 1 with WDT file ID 782779. Durotar is UI map 1411, the Barrens 1413, Kalimdor 1414. Durotar covers ADT tiles x 35 to 45, y 28 to 35.
