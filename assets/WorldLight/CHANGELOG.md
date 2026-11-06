@@ -1,5 +1,10 @@
 # WorldLight changelog
 
+## Unreleased
+
+**New**
+- Icon in the in-game addon list.
+
 ## 1.0.2
 
 **New**

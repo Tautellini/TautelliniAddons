@@ -12,3 +12,4 @@ First release.
 - Area names: Essential or All, uppercase, sized like baked-in map text
 - The same map on the minimap, compatible with minimap addons such as EllesmereUI
 - All options in a menu on the world map and under Options > AddOns > ClearMap
+- Icon in the in-game addon list

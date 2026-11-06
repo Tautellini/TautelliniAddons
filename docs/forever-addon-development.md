@@ -55,11 +55,14 @@ Minimal TOC:
 ## Title: My Addon
 ## Notes: What it does in one line
 ## Author: Tautellini
+## IconTexture: Interface\AddOns\MyAddon\Media\icon
 ## Version: @project-version@
 ## SavedVariables: MyAddonDB
 
 MyAddon.lua
 ```
+
+`IconTexture` is the icon in the addon list, shown at 20 x 20. Without it the list shows a question mark. Use a 64 x 64 RGBA `.tga` so rounded corners stay transparent.
 
 Edits to `.lua` files need a `/reload`. New files and TOC changes need a full client restart.
 
