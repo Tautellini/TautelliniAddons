@@ -19,7 +19,7 @@ local LABEL_STYLES = {
 local LABEL_GROWTH = 1.6 -- size at full zoom relative to fully zoomed out
 local BOX_PAD_X, BOX_PAD_Y = 4, 2
 local AREA_OFF, AREA_ESSENTIAL, AREA_ALL = 0, 1, 2
-local defaults = { enabled = true, cityMaps = true, minimap = true, cities = true, caves = true, areaNames = AREA_ESSENTIAL,
+local defaults = { enabled = true, cityMaps = true, minimap = true, caves = true, areaNames = AREA_ESSENTIAL,
     labelBackground = false, labelBackgroundOpacity = 50 }
 -- Bumped when defaults change in a way existing users should get once (see ADDON_LOADED).
 local SETTINGS_VERSION = 2
@@ -197,7 +197,8 @@ local function UpdateOverlay(mapID)
     end)
     local areas = ns.db.areaNames == AREA_ALL and data.labels or ns.db.areaNames == AREA_ESSENTIAL and data.essential or {}
     Fill(areaLabels, areas or {}, CreateAreaLabel, SetLabel)
-    Fill(cityLabels, ns.db.cities and data.cities or {}, CreateCityLabel, SetLabel)
+    -- Capital names belong to both Essential and All. Their highlight is part of the tiles.
+    Fill(cityLabels, ns.db.areaNames ~= AREA_OFF and data.cities or {}, CreateCityLabel, SetLabel)
     PlaceOverlay()
 end
 
@@ -228,7 +229,6 @@ local function MapMenu(_, root)
     root:CreateTitle("ClearMap")
     root:CreateCheckbox("Clear map", Get("enabled"), Toggle("enabled"))
     root:CreateCheckbox("City maps", Get("cityMaps"), Toggle("cityMaps"))
-    root:CreateCheckbox("Capital cities", Get("cities"), Toggle("cities"))
     root:CreateCheckbox("Cave entrances", Get("caves"), Toggle("caves"))
     root:CreateCheckbox("Minimap", Get("minimap"), Toggle("minimap"))
     root:CreateTitle("Area names")
@@ -252,8 +252,6 @@ local function RegisterSettings()
         "Show ClearMap tiles on maps that have them. The ClearMap button on the world map has the same options.")
     Settings.CreateCheckbox(category, Register("cityMaps", "City maps"),
         "Draw Stormwind, Orgrimmar, Ironforge and Undercity from the floors of their buildings, on the world map and the minimap. Off shows Blizzard's maps there.")
-    Settings.CreateCheckbox(category, Register("cities", "Capital cities"),
-        "Highlight capital cities on zone maps and label them in their own style.")
     Settings.CreateCheckbox(category, Register("caves", "Cave entrances"),
         "Show a pin at every cave entrance. Hover it for the cave's name.")
     Settings.CreateCheckbox(category, Register("minimap", "Minimap"),
@@ -261,10 +259,10 @@ local function RegisterSettings()
     Settings.CreateDropdown(category, Register("areaNames", "Area names"), function()
         local options = Settings.CreateControlTextContainer()
         options:Add(AREA_OFF, "Off")
-        options:Add(AREA_ESSENTIAL, "Essential", "The areas Blizzard's own map labels.")
-        options:Add(AREA_ALL, "All", "Every subzone.")
+        options:Add(AREA_ESSENTIAL, "Essential", "The areas and capitals Blizzard's own map labels.")
+        options:Add(AREA_ALL, "All", "Every subzone and capital.")
         return options:GetData()
-    end, "Write area names onto the map. Essential shows the areas Blizzard's own map labels, All shows every subzone.")
+    end, "Write area names onto the map. Essential shows the areas Blizzard's own map labels, All shows every subzone. Capitals are named in both.")
     Settings.CreateCheckbox(category, Register("labelBackground", "Label background"),
         "Put a dark box behind area and capital names, so they stay readable on any part of the map.")
     local opacity = Settings.CreateSliderOptions(10, 100, 5)
@@ -320,6 +318,7 @@ function frame:ADDON_LOADED(name)
             ClearMapDB.labelBackground = false
         end
         ClearMapDB.version = SETTINGS_VERSION
+        ClearMapDB.cities = nil -- 1.0 test builds had a separate switch for capital names
         for key, value in pairs(defaults) do
             if ClearMapDB[key] == nil then
                 ClearMapDB[key] = value

@@ -157,13 +157,19 @@ assert(ClearMapDB.labels == nil and ClearMapDB.areaNames == 1 and ClearMapDB.lab
 onEvent(eventFrame, "PLAYER_LOGIN")
 
 -- World map refresh with every label mode and option.
+-- Durotar names Orgrimmar (area 1637) whenever area names are on.
 for _, mode in ipairs({ 0, 1, 2 }) do
     ns.settings.areaNames:SetValue(mode)
     WorldMapFrame:RefreshDetailLayers()
     WorldMapFrame:OnCanvasScaleChanged()
+    local capital = false
+    for _, f in ipairs(eventFrames) do
+        if f.shown and f.text and f.text.text == "AREA 1637" then capital = true end
+    end
+    assert(capital == (mode ~= 0), "Orgrimmar's name should show exactly when area names are on, mode " .. mode)
 end
 ns.settings.labelBackgroundOpacity:SetValue(80)
-for _, key in ipairs({ "labelBackground", "cityMaps", "cities", "caves", "minimap", "enabled" }) do
+for _, key in ipairs({ "labelBackground", "cityMaps", "caves", "minimap", "enabled" }) do
     ns.settings[key]:SetValue(false)
     WorldMapFrame:RefreshDetailLayers()
     ns.settings[key]:SetValue(true)
