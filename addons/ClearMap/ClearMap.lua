@@ -8,10 +8,17 @@ local TILE_PATH = "Interface\\AddOns\\ClearMap\\Tiles\\%d\\%d_%d"
 local FADE_PATH = "Interface\\AddOns\\ClearMap\\Tiles\\%d\\fade"
 local CIRCLE_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local HALO = { 1, 0.96, 0.88, 0.9 }
-local AREA_COLOR = { 0.29, 0.18, 0.11 }
-local CITY_COLOR = { 0.45, 0.12, 0.07 }
+-- Label styles: dark text with a light halo on the bare map, light text on the dark background box.
+local LABEL_STYLES = {
+    area = { size = 10, ink = { 0.29, 0.18, 0.11 }, onBox = { 1, 0.94, 0.82 } },
+    city = { size = 12, ink = { 0.45, 0.12, 0.07 }, onBox = { 1, 0.76, 0.55 } },
+}
+-- Like text baked into map art, labels are small when zoomed out and grow as the map is zoomed in.
+local LABEL_GROWTH = 1.6 -- size at full zoom relative to fully zoomed out
+local BOX_PAD_X, BOX_PAD_Y = 4, 2
 local AREA_OFF, AREA_ESSENTIAL, AREA_ALL = 0, 1, 2
-local defaults = { enabled = true, minimap = true, cities = true, caves = true, areaNames = AREA_OFF }
+local defaults = { enabled = true, minimap = true, cities = true, caves = true, areaNames = AREA_OFF,
+    labelBackground = true, labelBackgroundOpacity = 50 }
 
 -- Our textures per Blizzard detail layer frame. Kept in our own table so no Blizzard table is written to.
 local layerTextures = {}
@@ -97,34 +104,53 @@ local function CreateCavePin()
     return pin
 end
 
--- Areas and capitals are different kinds of information, so they get different type.
-local function LabelFactory(fontObject, color)
+-- Areas and capitals are different kinds of information, so they get different sizes and colors.
+local function LabelFactory(kind)
     return function()
         local frame = CreateFrame("Frame", nil, overlay)
-        frame:SetSize(1, 1)
-        frame.text = frame:CreateFontString(nil, "OVERLAY", fontObject)
+        frame.kind = kind
+        frame.box = frame:CreateTexture(nil, "BACKGROUND")
+        frame.box:SetAllPoints()
+        frame.text = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         frame.text:SetPoint("CENTER")
-        frame.text:SetTextColor(unpack(color))
-        frame.text:SetShadowColor(unpack(HALO))
-        frame.text:SetShadowOffset(1, -1)
         return frame
     end
 end
-local CreateAreaLabel = LabelFactory("GameFontNormal", AREA_COLOR)
-local CreateCityLabel = LabelFactory("GameFontNormalLarge", CITY_COLOR)
+local CreateAreaLabel = LabelFactory("area")
+local CreateCityLabel = LabelFactory("city")
 
--- Keep pins and labels the same size on screen at every zoom level.
+-- Font, colors and the optional dark box, from the current settings.
+local function StyleLabel(frame)
+    local style = LABEL_STYLES[frame.kind]
+    local font = GameFontNormal:GetFont()
+    frame.text:SetFont(font, style.size, "")
+    local boxed = ns.db.labelBackground
+    frame.text:SetTextColor(unpack(boxed and style.onBox or style.ink))
+    frame.text:SetShadowColor(unpack(boxed and { 0, 0, 0, 0.8 } or HALO))
+    frame.text:SetShadowOffset(1, -1)
+    frame.box:SetColorTexture(0, 0, 0, ns.db.labelBackgroundOpacity / 100)
+    frame.box:SetShown(boxed)
+    frame:SetSize(frame.text:GetStringWidth() + 2 * BOX_PAD_X, frame.text:GetStringHeight() + 2 * BOX_PAD_Y)
+end
+
+local function Place(f, s)
+    f:SetScale(s)
+    f:ClearAllPoints()
+    -- Offsets are in the child's own scale, so divide by it.
+    f:SetPoint("CENTER", overlay, "TOPLEFT", f.x * overlay.w / s, -f.y * overlay.h / s)
+end
+
+-- Cave pins keep one size on screen. Labels behave like baked-in map text: small when zoomed out, larger when zoomed in.
 local function PlaceOverlay()
     if not overlay or not overlay:IsShown() then return end
-    local s = 1 / WorldMapFrame:GetCanvasScale()
-    for _, list in ipairs({ cavePins, areaLabels, cityLabels }) do
+    local pinScale = 1 / WorldMapFrame:GetCanvasScale()
+    local labelScale = pinScale * (1 + (LABEL_GROWTH - 1) * (WorldMapFrame:GetCanvasZoomPercent() or 0))
+    for _, f in ipairs(cavePins) do
+        if f:IsShown() then Place(f, pinScale) end
+    end
+    for _, list in ipairs({ areaLabels, cityLabels }) do
         for _, f in ipairs(list) do
-            if f:IsShown() then
-                f:SetScale(s)
-                f:ClearAllPoints()
-                -- Offsets are in the child's own scale, so divide by it.
-                f:SetPoint("CENTER", overlay, "TOPLEFT", f.x * overlay.w / s, -f.y * overlay.h / s)
-            end
+            if f:IsShown() then Place(f, labelScale) end
         end
     end
 end
@@ -141,9 +167,11 @@ local function Fill(list, entries, create, setup)
     end
 end
 
-local function SetLabel(frame, entry, upper)
+-- Uppercase, like the labels in Blizzard's own map art.
+local function SetLabel(frame, entry)
     local name = C_Map.GetAreaInfo(entry[1])
-    frame.text:SetText(name and (upper and name:upper() or name) or "")
+    frame.text:SetText(name and name:upper() or "")
+    StyleLabel(frame)
     return name ~= nil
 end
 
@@ -159,8 +187,8 @@ local function UpdateOverlay(mapID)
         return true
     end)
     local areas = ns.db.areaNames == AREA_ALL and data.labels or ns.db.areaNames == AREA_ESSENTIAL and data.essential or {}
-    Fill(areaLabels, areas or {}, CreateAreaLabel, function(frame, entry) return SetLabel(frame, entry, false) end)
-    Fill(cityLabels, ns.db.cities and data.cities or {}, CreateCityLabel, function(frame, entry) return SetLabel(frame, entry, true) end)
+    Fill(areaLabels, areas or {}, CreateAreaLabel, SetLabel)
+    Fill(cityLabels, ns.db.cities and data.cities or {}, CreateCityLabel, SetLabel)
     PlaceOverlay()
 end
 
@@ -198,6 +226,7 @@ local function MapMenu(_, root)
         root:CreateRadio(choice[2], function() return ns.db.areaNames == choice[1] end,
             function() ns.settings.areaNames:SetValue(choice[1]) end)
     end
+    root:CreateCheckbox("Label background", Get("labelBackground"), Toggle("labelBackground"))
 end
 
 local function RegisterSettings()
@@ -224,6 +253,12 @@ local function RegisterSettings()
         options:Add(AREA_ALL, "All", "Every subzone.")
         return options:GetData()
     end, "Write area names onto the map. Essential shows the areas Blizzard's own map labels, All shows every subzone.")
+    Settings.CreateCheckbox(category, Register("labelBackground", "Label background"),
+        "Put a dark box behind area and capital names, so they stay readable on any part of the map.")
+    local opacity = Settings.CreateSliderOptions(10, 100, 5)
+    opacity:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+    Settings.CreateSlider(category, Register("labelBackgroundOpacity", "Label background opacity"), opacity,
+        "How dark the box behind names is, in percent.")
     Settings.RegisterAddOnCategory(category)
 end
 

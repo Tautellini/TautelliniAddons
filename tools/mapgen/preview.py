@@ -24,6 +24,7 @@ WATER_MIN_DEPTH = 0.3
 MIN_STEEP_CELLS = 25  # steep patches smaller than this (about 430 square yards) are noise for the player
 SS = 4  # supersampled pixels per cell. Output is SS / 2 pixels per cell, anti-aliased by a 2x2 box filter.
 MARGIN = 8  # cells kept around the map region so blurring has data at the edges
+LINE_SCALE = 1.0  # line widths are tuned for a 2560-pixel render. export.py scales them to the actual render width.
 STYLES = {
     "sand": {
         "land": (233, 224, 207), "steep": (212, 196, 172), "steep_edge": (168, 148, 118),
@@ -148,7 +149,7 @@ def smooth(mask, sigma_cells, scale=None):
 
 def edge(hi, width_px):
     """Supersampled outline just outside a supersampled mask."""
-    r = width_px * 2  # output pixels to supersampled pixels
+    r = width_px * 2 * LINE_SCALE  # output pixels to supersampled pixels, scaled so lines keep their weight on the world map
     disk = np.hypot(*np.mgrid[-r:r + 1, -r:r + 1]) <= r
     return ndimage.binary_dilation(hi, disk) & ~hi
 
@@ -456,7 +457,7 @@ def render(masks, style, markers=True, fade=True):
     depth = np.clip(ndimage.distance_transform_edt(masks["water"]) / DEEP_WATER_CELLS, 0, 1)
     depth = ndimage.zoom(depth.astype(np.float32), SS // 2, order=1, grid_mode=True, mode="nearest")[..., None]
     water_color = np.array(s["water"], np.float32) * (1 - depth) + np.array(s["water_deep"], np.float32) * depth
-    k = SHADOW_OFFSET_PX * 2
+    k = max(1, round(SHADOW_OFFSET_PX * 2 * LINE_SCALE))
     shadow = ndimage.gaussian_filter(np.pad(steep_hi, ((k, 0), (k, 0)))[:-k, :-k].astype(np.float32), k)  # soft, offset down-right
 
     img = np.empty((steep_hi.shape[0] // 2, steep_hi.shape[1] // 2, 3), np.float32)
@@ -471,7 +472,7 @@ def render(masks, style, markers=True, fade=True):
         liquid_hi = smooth(masks[liquid], 0.8)
         paint(img, liquid_hi, s[liquid])
         paint(img, edge(liquid_hi, 1.0), s[liquid + "_edge"])
-    r = ROAD_RADIUS_PX * 2
+    r = ROAD_RADIUS_PX * 2 * LINE_SCALE
     disk = np.hypot(*np.mgrid[-r:r + 1, -r:r + 1]) <= r
     road_hi = ndimage.binary_dilation(np.kron(masks["road"], np.ones((SS // 2, SS // 2), bool)), disk)
     paint(img, edge(road_hi, 0.75) & ~water_hi, s["road_edge"])
@@ -483,7 +484,8 @@ def render(masks, style, markers=True, fade=True):
     paint(img, city_hi, s["city"], CITY_FILL)
     paint(img, edge(city_hi, 1.25) & ~smooth(masks["water"], 0.8), s["city_edge"])
     building = masks["building"]
-    b_shadow = ndimage.gaussian_filter(np.pad(building, ((4, 0), (4, 0)))[:-4, :-4].astype(np.float32), 3)
+    o = max(1, round(4 * LINE_SCALE))
+    b_shadow = ndimage.gaussian_filter(np.pad(building, ((o, 0), (o, 0)))[:-o, :-o].astype(np.float32), 3 * LINE_SCALE)
     paint(img, b_shadow * ~building, s["shadow"], 0.35)
     paint(img, building, s["building"])
     paint(img, edge(building, 0.6), s["building_edge"])
@@ -501,7 +503,7 @@ def render(masks, style, markers=True, fade=True):
     cave = smooth(masks["cave"][::SS, ::SS], 0.6)  # round off the cave footprint before outlining it
     rows, cols = np.indices(cave.shape)
     paint(img, cave, s["cave"], 0.12)
-    paint(img, edge(cave, 0.75) & ((rows + cols) // DASH_PX % 2 == 0), s["cave_edge"])
+    paint(img, edge(cave, 0.75) & ((rows + cols) // max(1, round(DASH_PX * LINE_SCALE)) % 2 == 0), s["cave_edge"])
     marks = Image.new("L", (img.shape[1] * 2, img.shape[0] * 2))
     ring, dot = ENTRANCE_RADIUS_PX * 2, (ENTRANCE_RADIUS_PX - 1.5) * 2
     for r, c in masks["entrances"] if markers else []:

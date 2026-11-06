@@ -9,15 +9,18 @@ local SEA = { 0.28, 0.53, 0.67 } -- the deep water color, shown where no map has
 
 -- The minimap's own shape. Forever's default, replaced whenever Blizzard or a minimap addon sets another mask.
 local minimapMask = (GetMinimapShape and GetMinimapShape() == "SQUARE") and SQUARE_MASK or "ui-hud-minimap-frame-generic-mask"
-local frame, mask
+local clip, frame, mask
 local textures = {}
 local active, settingMask = false, false
+-- Outside its own rectangle a mask repeats its edge pixels by default. A square mask is white at the edge,
+-- so the tiles would show across the whole screen. Transparent edges keep them inside the shape.
+local EDGE = "CLAMPTOBLACKADDITIVE"
 
 local function SetMask(target, path)
     if type(path) == "string" and C_Texture.GetAtlasInfo(path) then
-        target:SetAtlas(path)
+        target:SetAtlas(path, false, nil, nil, EDGE, EDGE)
     else
-        target:SetTexture(path)
+        target:SetTexture(path, EDGE, EDGE)
     end
 end
 
@@ -25,7 +28,7 @@ end
 local function UseOurTerrain(on)
     if on == active then return end
     active = on
-    frame:SetShown(on)
+    clip:SetShown(on)
     settingMask = true
     Minimap:SetMaskTexture(on and BLANK_MASK or minimapMask)
     settingMask = false
@@ -79,8 +82,9 @@ local function Update()
     end
     -- Minimap addons move, rescale and re-level the minimap, so follow it every frame.
     local level = math.max(0, Minimap:GetFrameLevel() - 1)
-    if frame:GetFrameLevel() ~= level then
-        frame:SetFrameLevel(level)
+    if clip:GetFrameLevel() ~= level or frame:GetFrameLevel() ~= level then
+        clip:SetFrameLevel(level)
+        frame:SetFrameLevel(level) -- a child defaults to one above its parent, which would be the minimap's own level
     end
     local yards = VIEW_YARDS[Minimap:GetZoom()] or VIEW_YARDS[0]
     local k, half = frame:GetWidth() / yards, yards / 2 -- our own units, which differ from the minimap's when it is scaled
@@ -135,11 +139,19 @@ function ns.SetupMinimap()
     -- A child of the minimap itself, one level below it: it follows every reparent, rescale and fade that minimap
     -- addons apply, while the minimap's terrain, blips and child frames stay on top. EllesmereUI, for example,
     -- moves the minimap out of MinimapCluster and fades the cluster to 0.
-    frame = CreateFrame("Frame", nil, Minimap)
-    frame:SetAllPoints(Minimap)
-    frame:SetFrameLevel(math.max(0, Minimap:GetFrameLevel() - 1))
+    -- The tiles are far larger than the minimap, so they sit inside a frame that clips to the minimap's rectangle.
+    -- The mask then cuts the round or cropped shape inside that rectangle.
+    local level = math.max(0, Minimap:GetFrameLevel() - 1)
+    clip = CreateFrame("Frame", nil, Minimap)
+    clip:SetAllPoints(Minimap)
+    clip:SetFrameLevel(level)
+    clip:SetClipsChildren(true)
+    clip:EnableMouse(false)
+    clip:Hide()
+    frame = CreateFrame("Frame", nil, clip)
+    frame:SetAllPoints(clip)
+    frame:SetFrameLevel(level)
     frame:EnableMouse(false)
-    frame:Hide()
     mask = frame:CreateMaskTexture()
     mask:SetAllPoints(frame)
     SetMask(mask, minimapMask)

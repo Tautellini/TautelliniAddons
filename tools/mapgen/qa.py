@@ -29,11 +29,13 @@ def draw_labels(img, meta, db2_dir):
 
 def stitch(tiles_dir, ui_map_id, width, db2_dir=None):
     meta = json.load(open(os.path.join(tiles_dir, str(ui_map_id), "meta.json"), encoding="utf-8"))
-    tile = Image.open(os.path.join(tiles_dir, str(ui_map_id), "0_0.tga")).width
+    folder = os.path.join(tiles_dir, str(ui_map_id))
+    ext = ".blp" if os.path.exists(os.path.join(folder, "0_0.blp")) else ".tga"
+    tile = Image.open(os.path.join(folder, "0_0" + ext)).width
     img = Image.new("RGB", (meta["cols"] * tile, meta["rows"] * tile))
     for r in range(meta["rows"]):
         for c in range(meta["cols"]):
-            img.paste(Image.open(os.path.join(tiles_dir, str(ui_map_id), f"{r}_{c}.tga")).convert("RGB"), (c * tile, r * tile))
+            img.paste(Image.open(os.path.join(folder, f"{r}_{c}{ext}")).convert("RGB"), (c * tile, r * tile))
     # The client shows the grid at the map's own aspect (about 3:2), not the grid's.
     img = img.resize((width, round(width * 2 / 3)), Image.LANCZOS).convert("RGBA")
     fade = os.path.join(tiles_dir, str(ui_map_id), "fade.tga")

@@ -21,7 +21,7 @@ read_globals = {
     "UnitHealth", "UnitHealthMax", "Enum", "Item",
     "WorldFrame", "C_DateAndTime", "GetServerTime", "GetGameTime", "IsIndoors", "IsInInstance",
     "Settings", "MinimalSliderWithSteppersMixin",
-    "WorldMapFrame", "C_Map", "GameTooltip", "Minimap", "C_Texture", "C_CVar", "MenuUtil", "GetMinimapShape",
+    "WorldMapFrame", "C_Map", "GameTooltip", "Minimap", "C_Texture", "C_CVar", "MenuUtil", "GetMinimapShape", "GameFontNormal",
     "issecretvalue", "hasanysecretvalues", "issecrettable",
     "canaccessvalue", "canaccesstable", "canaccesssecrets", "scrubsecretvalues",
     "WOW_PROJECT_ID", "WOW_PROJECT_MAINLINE", "WOW_PROJECT_CAMELOT",

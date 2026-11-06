@@ -37,6 +37,10 @@ function Widget:SetText(t) assert(type(t) == "string", "SetText needs a string")
 function Widget:SetTexture(path) assert(path ~= nil, "SetTexture with nil"); self.texture = path end
 function Widget:SetMaskTexture(path) assert(path ~= nil, "SetMaskTexture with nil"); self.mask = path end
 function Widget:SetPoint(...) local n = select("#", ...); assert(n >= 1, "SetPoint without arguments") end
+function Widget:GetStringWidth() assert(self.text, "measuring a string before SetText"); return 6 * #self.text end
+function Widget:GetStringHeight() return 12 end
+function Widget:SetFont(path, size, flags) assert(type(path) == "string" and type(size) == "number" and type(flags) == "string", "bad SetFont arguments") end
+function Widget:SetColorTexture(r, g, b, a) assert(type(r) == "number" and (a == nil or (a >= 0 and a <= 1)), "bad color") end
 
 function CreateFrame(kind, name, parent, template) return NewWidget(kind, parent) end
 function hooksecurefunc(tbl, name, hook)
@@ -60,6 +64,9 @@ C_Map = {
 C_CVar = { GetCVarBool = function() return false end }
 C_Texture = { GetAtlasInfo = function(name) return name == "ui-hud-minimap-frame-generic-mask" and {} or nil end }
 GameTooltip = NewWidget("GameTooltip")
+GameFontNormal = NewWidget("Font")
+function GameFontNormal:GetFont() return "Fonts/FRIZQT__.TTF", 12, "" end
+MinimalSliderWithSteppersMixin = { Label = { Right = 1 } }
 
 local function Pool(items)
     return { EnumerateActive = function() local i = 0; return function() i = i + 1; return items[i] end end }
@@ -75,6 +82,7 @@ WorldMapFrame.ScrollContainer = NewWidget("ScrollFrame")
 function WorldMapFrame:GetMapID() return self.mapID end
 function WorldMapFrame:GetCanvas() return NewWidget("Frame") end
 function WorldMapFrame:GetCanvasScale() return 0.8 end
+function WorldMapFrame:GetCanvasZoomPercent() return 0.5 end
 function WorldMapFrame:RefreshDetailLayers() log("RefreshDetailLayers") end
 function WorldMapFrame:OnCanvasScaleChanged() log("OnCanvasScaleChanged") end
 function WorldMapFrame:EnumeratePinsByTemplate() local done = false; return function() if not done then done = true; return explorationPin end end end
@@ -107,6 +115,11 @@ Settings = {
         return c
     end,
     RegisterAddOnCategory = function() end,
+    CreateSliderOptions = function(lo, hi, step)
+        assert(lo < hi and step > 0, "bad slider range")
+        return { SetLabelFormatter = function() end }
+    end,
+    CreateSlider = function(category, setting, options, tooltip) assert(setting and options and tooltip) end,
 }
 local menuItems = {}
 MenuUtil = {
@@ -147,7 +160,8 @@ for _, mode in ipairs({ 0, 1, 2 }) do
     WorldMapFrame:RefreshDetailLayers()
     WorldMapFrame:OnCanvasScaleChanged()
 end
-for _, key in ipairs({ "cities", "caves", "minimap", "enabled" }) do
+ns.settings.labelBackgroundOpacity:SetValue(80)
+for _, key in ipairs({ "labelBackground", "cities", "caves", "minimap", "enabled" }) do
     ns.settings[key]:SetValue(false)
     WorldMapFrame:RefreshDetailLayers()
     ns.settings[key]:SetValue(true)

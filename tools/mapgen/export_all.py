@@ -10,7 +10,7 @@ from multiprocessing import Pool
 
 import export
 
-WORKERS = 6  # each worker holds one map's rasters, about 2 to 4 GB for the largest zones
+WORKERS = 3  # at 1.5 yards per pixel the largest zones need several GB of rasters each
 # Capital cities are mostly one giant building model, so terrain says little about their streets.
 # They keep Blizzard's art (spec open question 2). Thunder Bluff and Darnassus render well and are included.
 CITY_MAPS = {1453, 1454, 1455, 1458}  # Stormwind, Orgrimmar, Ironforge, Undercity

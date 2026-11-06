@@ -1,11 +1,12 @@
-"""Render one UI map and write it into the addon as TGA tiles.
+"""Render one UI map and write it into the addon as BLP tiles.
 
 Usage: py -3.13 export.py <uiMapID> <data_dir> <addon_dir> [clay|sand|slate]
-Writes <addon_dir>/Tiles/<uiMapID>/<row>_<col>.tga plus meta.json (grid, labels, cave entrances), then
+Writes <addon_dir>/Tiles/<uiMapID>/<row>_<col>.blp, fade.tga and meta.json (grid, labels, cave entrances), then
 regenerates <addon_dir>/Tiles/Tiles.lua from every meta.json under <addon_dir>/Tiles/.
 """
 import csv
 import json
+import math
 import os
 import sys
 
@@ -13,13 +14,15 @@ from PIL import Image
 
 import preview
 from adt import UNIT
+from blp import write_blp
 from preview import CAPITAL_UIMAPS, build, fade_overlay, render
 from wdt import region_for
 
-TILE_PX = 512  # power of two, as the client requires
-COLS = 4
+TILE_PX = 1024  # power of two, as the client requires
+YARDS_PER_PX = 1.5  # every map gets the same sharpness, so large zones are as crisp as small ones
 FADE_PX = 256  # the neighbor-zone fade is soft, a small texture is enough
-TARGET_PX = 2560  # rendered width before resampling to the tile grid
+MAX_SS = 8
+LINE_REFERENCE_PX = 2560  # the render width the approved line weights were tuned at
 
 
 def essential_labels(db2_dir, ui_map_id):
@@ -67,29 +70,32 @@ def write_index(tiles_dir):
     return metas
 
 
-def pick_ss(ui_map_id, data_dir):
-    """Supersampling so every map renders about TARGET_PX wide, which keeps line weights equal across zones."""
+def grid_for(ui_map_id, data_dir):
+    """(rows, cols, supersampling) for a map: enough 1024-pixel tiles for YARDS_PER_PX, rendered at least that large."""
     min_x, min_y, max_x, max_y = region_for(os.path.join(data_dir, "db2", "UiMapAssignment.csv"), ui_map_id)
-    out_px_per_cell = TARGET_PX / ((max_y - min_y) / UNIT)
-    return int(min(8, max(2, 2 * round(out_px_per_cell))))  # even, so output pixels map to whole supersampled pixels
+    cols = max(1, math.ceil((max_y - min_y) / YARDS_PER_PX / TILE_PX))
+    rows = max(1, math.ceil((max_x - min_x) / YARDS_PER_PX / TILE_PX))
+    out_px_per_cell = cols * TILE_PX / ((max_y - min_y) / UNIT)
+    # Even, so output pixels map to whole supersampled pixels. Rounded up, so tiles are only ever downsampled.
+    return rows, cols, int(min(MAX_SS, max(2, 2 * math.ceil(out_px_per_cell))))
 
 
 def main(ui_map_id, data_dir, addon_dir, style="clay", index=True):
-    preview.SS = pick_ss(ui_map_id, data_dir)  # shortcut: module global, so run one map per process when parallel
+    rows, cols, preview.SS = grid_for(ui_map_id, data_dir)  # shortcut: SS is a module global, so run one map per process
     masks = build(ui_map_id, data_dir)
-    img = render(masks, style, markers=False, fade=False)  # pins and the fade are drawn by the addon
     left, top, right, bottom = masks["box"]
-    rows = max(1, round(COLS * (bottom - top) / (right - left)))
+    preview.LINE_SCALE = (right - left) / LINE_REFERENCE_PX  # same line weight relative to the map at any resolution
+    img = render(masks, style, markers=False, fade=False)  # pins and the fade are drawn by the addon
     # The client stretches the tile grid over the map canvas, so resample the exact region to the grid.
-    full = img.resize((COLS * TILE_PX, rows * TILE_PX), Image.LANCZOS, box=(left, top, right, bottom)).convert("RGBA")  # 32-bit TGA, the format addons commonly ship
+    full = img.resize((cols * TILE_PX, rows * TILE_PX), Image.LANCZOS, box=(left, top, right, bottom))
     out = os.path.join(addon_dir, "Tiles", str(ui_map_id))
     os.makedirs(out, exist_ok=True)
     for f in os.listdir(out):
-        if f.endswith(".tga"):
+        if f.endswith((".tga", ".blp")):  # an old grid may have had more tiles
             os.remove(os.path.join(out, f))
     for r in range(rows):
-        for c in range(COLS):
-            full.crop((c * TILE_PX, r * TILE_PX, (c + 1) * TILE_PX, (r + 1) * TILE_PX)).save(os.path.join(out, f"{r}_{c}.tga"))
+        for c in range(cols):
+            write_blp(full.crop((c * TILE_PX, r * TILE_PX, (c + 1) * TILE_PX, (r + 1) * TILE_PX)), os.path.join(out, f"{r}_{c}.blp"))
     fade_overlay(masks, style).resize((FADE_PX, FADE_PX), Image.LANCZOS, box=(left, top, right, bottom)).save(os.path.join(out, "fade.tga"))
     # Supersampled pixels to map coordinates (0..1 across the map region), as the client uses them.
     norm = lambda p: {"x": float((p["c"] / 2 - left) / (right - left)), "y": float((p["r"] / 2 - top) / (bottom - top))}
@@ -101,12 +107,12 @@ def main(ui_map_id, data_dir, addon_dir, style="clay", index=True):
     cities = [clamp(q) for q in ({"area": p["area"], **norm(p)} for p in masks["cities"]) if inside(q)]
     essential = essential_labels(os.path.join(data_dir, "db2"), ui_map_id)
     min_x, min_y, max_x, max_y = region_for(os.path.join(data_dir, "db2", "UiMapAssignment.csv"), ui_map_id)
-    meta = {"rows": rows, "cols": COLS, "map": masks["map_id"], "bounds": [min_x, min_y, max_x, max_y],
+    meta = {"rows": rows, "cols": cols, "map": masks["map_id"], "bounds": [min_x, min_y, max_x, max_y],
             "labels": labels, "essential": essential, "cities": cities, "caves": caves}
     json.dump(meta, open(os.path.join(out, "meta.json"), "w", encoding="utf-8"), indent=1)
     if index:
         write_index(os.path.join(addon_dir, "Tiles"))
-    print(f"{ui_map_id}: SS {preview.SS}, {rows} x {COLS} tiles, {len(labels)} labels, {len(caves)} cave entrances -> {out}")
+    print(f"{ui_map_id}: SS {preview.SS}, {rows} x {cols} tiles, {len(labels)} labels, {len(caves)} cave entrances -> {out}")
 
 
 if __name__ == "__main__":
