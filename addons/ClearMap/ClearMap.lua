@@ -150,10 +150,14 @@ local function Place(f, s)
 end
 
 -- Cave pins keep one size on screen. Labels behave like baked-in map text: small when zoomed out, larger when zoomed in.
+-- Both follow Blizzard's own pins (MapCanvasPinMixin:ApplyCurrentScale): the zoom share is capped at 100 %, since map
+-- addons can zoom past Blizzard's limit, and the global pin scale that addons set for a smaller map applies too.
 local function PlaceOverlay()
     if not overlay or not overlay:IsShown() then return end
-    local pinScale = 1 / WorldMapFrame:GetCanvasScale()
-    local labelScale = pinScale * (1 + (LABEL_GROWTH - 1) * (WorldMapFrame:GetCanvasZoomPercent() or 0))
+    local map = WorldMapFrame
+    local pinScale = map:GetGlobalPinScale() / map:GetCanvasScale()
+    local zoom = math.min(math.max(map:GetCanvasZoomPercent() or 0, 0), 1)
+    local labelScale = pinScale * (1 + (LABEL_GROWTH - 1) * zoom)
     for _, f in ipairs(cavePins) do
         if f:IsShown() then Place(f, pinScale) end
     end
@@ -276,6 +280,7 @@ local function Setup()
     local map = WorldMapFrame
     hooksecurefunc(map, "RefreshDetailLayers", Refresh)
     hooksecurefunc(map, "OnCanvasScaleChanged", PlaceOverlay)
+    hooksecurefunc(map, "SetGlobalPinScale", PlaceOverlay)
     for pin in map:EnumeratePinsByTemplate("MapExplorationPinTemplate") do
         hooksecurefunc(pin, "RefreshOverlays", function(p)
             ApplyExploration(p, map:GetMapID())

@@ -27,6 +27,7 @@ function Widget:SetShown(v) self.shown = v and true or false end
 function Widget:Show() self.shown = true end
 function Widget:Hide() self.shown = false end
 function Widget:IsShown() return self.shown end
+function Widget:SetScale(s) self.scale = s end
 function Widget:GetFrameLevel() return self.level end
 function Widget:SetFrameLevel(l) self.level = l end
 function Widget:GetWidth() return self.width end
@@ -83,7 +84,9 @@ WorldMapFrame.ScrollContainer = NewWidget("ScrollFrame")
 function WorldMapFrame:GetMapID() return self.mapID end
 function WorldMapFrame:GetCanvas() return NewWidget("Frame") end
 function WorldMapFrame:GetCanvasScale() return 0.8 end
-function WorldMapFrame:GetCanvasZoomPercent() return 0.5 end
+function WorldMapFrame:GetCanvasZoomPercent() return self.zoomPercent or 0.5 end
+function WorldMapFrame:GetGlobalPinScale() return self.globalPinScale or 1 end
+function WorldMapFrame:SetGlobalPinScale(s) self.globalPinScale = s end
 function WorldMapFrame:RefreshDetailLayers() log("RefreshDetailLayers") end
 function WorldMapFrame:OnCanvasScaleChanged() log("OnCanvasScaleChanged") end
 function WorldMapFrame:EnumeratePinsByTemplate() local done = false; return function() if not done then done = true; return explorationPin end end end
@@ -185,6 +188,25 @@ end
 local named = 0
 for _, f in ipairs(eventFrames) do if f.text and f.text.text == "TRADE QUARTER" then named = named + 1 end end
 assert(named > 0, "Undercity's district names did not reach a label")
+
+-- A map addon zooms far past Blizzard's limit and shrinks pins for its smaller map: labels stay bounded.
+local function LargestLabelScale()
+    local largest = 0
+    for _, f in ipairs(eventFrames) do
+        if f.shown and f.text and f.scale then largest = math.max(largest, f.scale) end
+    end
+    return largest
+end
+WorldMapFrame.zoomPercent = 1
+WorldMapFrame:OnCanvasScaleChanged()
+local atMax = LargestLabelScale()
+WorldMapFrame.zoomPercent = 6
+WorldMapFrame:OnCanvasScaleChanged()
+assert(LargestLabelScale() == atMax, "labels kept growing past Blizzard's zoom limit")
+WorldMapFrame:SetGlobalPinScale(0.5)
+assert(math.abs(LargestLabelScale() - atMax / 2) < 1e-9, "labels ignored the global pin scale")
+WorldMapFrame:SetGlobalPinScale(1)
+WorldMapFrame.zoomPercent = nil
 
 -- A map without tiles.
 WorldMapFrame.mapID = 1414
