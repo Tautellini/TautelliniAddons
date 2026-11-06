@@ -12,7 +12,22 @@ import csv
 from PIL import Image, ImageDraw
 
 
-def stitch(tiles_dir, ui_map_id, width):
+AREA_NAMES = {}
+
+
+def draw_labels(img, meta, db2_dir):
+    """Write the essential area labels (brown) and capital labels (red) where the addon will place them."""
+    if not AREA_NAMES:
+        AREA_NAMES.update((int(r["ID"]), r["AreaName_lang"]) for r in csv.DictReader(open(os.path.join(db2_dir, "AreaTable.csv"), encoding="utf-8")))
+    draw = ImageDraw.Draw(img)
+    for key, color in (("essential", (90, 50, 20)), ("cities", (150, 20, 10))):
+        for l in meta.get(key, []):
+            text = AREA_NAMES.get(l["area"], "?")
+            x, y = l["x"] * img.width, l["y"] * img.height
+            draw.text((x, y), text.upper() if key == "cities" else text, fill=color, anchor="mm", stroke_width=2, stroke_fill=(255, 250, 240))
+
+
+def stitch(tiles_dir, ui_map_id, width, db2_dir=None):
     meta = json.load(open(os.path.join(tiles_dir, str(ui_map_id), "meta.json"), encoding="utf-8"))
     tile = Image.open(os.path.join(tiles_dir, str(ui_map_id), "0_0.tga")).width
     img = Image.new("RGB", (meta["cols"] * tile, meta["rows"] * tile))
@@ -24,7 +39,10 @@ def stitch(tiles_dir, ui_map_id, width):
     fade = os.path.join(tiles_dir, str(ui_map_id), "fade.tga")
     if os.path.exists(fade):  # the world map lays the neighbor-zone fade over the tiles
         img.alpha_composite(Image.open(fade).convert("RGBA").resize(img.size, Image.LANCZOS))
-    return img.convert("RGB")
+    img = img.convert("RGB")
+    if db2_dir:
+        draw_labels(img, meta, db2_dir)
+    return img
 
 
 def sheets(addon_dir, out_dir, ui_map_csv, cell=700):
@@ -35,7 +53,7 @@ def sheets(addon_dir, out_dir, ui_map_csv, cell=700):
     for n in range(0, len(ids), 4):
         sheet = Image.new("RGB", (2 * cell + 8, 2 * round(cell * 2 / 3) + 8), (40, 40, 40))
         for k, m in enumerate(ids[n:n + 4]):
-            img = stitch(tiles_dir, m, cell)
+            img = stitch(tiles_dir, m, cell, os.path.dirname(ui_map_csv))
             ImageDraw.Draw(img).text((8, 6), f"{m} {names.get(m, '?')}", fill=(20, 20, 20))
             sheet.paste(img, ((k % 2) * (cell + 8), (k // 2) * (round(cell * 2 / 3) + 8)))
         sheet.save(os.path.join(out_dir, f"sheet_{n // 4:02d}.png"))

@@ -3,17 +3,18 @@ local _, ns = ...
 -- Diameter of the minimap view in yards per outdoor zoom level, as used by HereBeDragons for Mainline clients.
 local VIEW_YARDS = { [0] = 466 + 2 / 3, 400, 333 + 1 / 3, 266 + 2 / 6, 200, 133 + 1 / 3 }
 local BLANK_MASK = "Interface\\AddOns\\ClearMap\\Media\\blank"
+local SQUARE_MASK = "Interface\\Buttons\\WHITE8X8"
 local TILE_PATH = "Interface\\AddOns\\ClearMap\\Tiles\\%d\\%d_%d"
 local SEA = { 0.28, 0.53, 0.67 } -- the deep water color, shown where no map has tiles
 
--- Forever's own minimap mask. Replaced whenever Blizzard or another addon sets a different one.
-local minimapMask = "ui-hud-minimap-frame-generic-mask"
-local frame, mask, sea
+-- The minimap's own shape. Forever's default, replaced whenever Blizzard or a minimap addon sets another mask.
+local minimapMask = (GetMinimapShape and GetMinimapShape() == "SQUARE") and SQUARE_MASK or "ui-hud-minimap-frame-generic-mask"
+local frame, mask
 local textures = {}
 local active, settingMask = false, false
 
 local function SetMask(target, path)
-    if C_Texture.GetAtlasInfo(path) then
+    if type(path) == "string" and C_Texture.GetAtlasInfo(path) then
         target:SetAtlas(path)
     else
         target:SetTexture(path)
@@ -28,6 +29,22 @@ local function UseOurTerrain(on)
     settingMask = true
     Minimap:SetMaskTexture(on and BLANK_MASK or minimapMask)
     settingMask = false
+end
+
+-- Installed at load, before minimap addons such as EllesmereUI set their own shape, so none of their masks are missed.
+if Minimap then
+    hooksecurefunc(Minimap, "SetMaskTexture", function(_, path)
+        if settingMask then return end
+        minimapMask = path
+        if mask then
+            SetMask(mask, path)
+        end
+        if active then
+            settingMask = true
+            Minimap:SetMaskTexture(BLANK_MASK)
+            settingMask = false
+        end
+    end)
 end
 
 local function Texture(i)
@@ -60,8 +77,16 @@ local function Update()
     if not mapID then
         return UseOurTerrain(false)
     end
+    -- Minimap addons move, rescale and re-level the minimap, so follow it every frame.
+    local level = math.max(0, Minimap:GetFrameLevel() - 1)
+    if frame:GetFrameLevel() ~= level then
+        frame:SetFrameLevel(level)
+    end
     local yards = VIEW_YARDS[Minimap:GetZoom()] or VIEW_YARDS[0]
-    local k, half = Minimap:GetWidth() / yards, yards / 2
+    local k, half = frame:GetWidth() / yards, yards / 2 -- our own units, which differ from the minimap's when it is scaled
+    if k <= 0 then
+        return UseOurTerrain(false)
+    end
     local used = 0
 
     local function Draw(id, grid, sublevel)
@@ -107,30 +132,21 @@ end
 
 function ns.SetupMinimap()
     if not Minimap then return end
-    -- Below the minimap, so its blips and child frames stay on top of our terrain.
-    frame = CreateFrame("Frame", nil, Minimap:GetParent())
+    -- A child of the minimap itself, one level below it: it follows every reparent, rescale and fade that minimap
+    -- addons apply, while the minimap's terrain, blips and child frames stay on top. EllesmereUI, for example,
+    -- moves the minimap out of MinimapCluster and fades the cluster to 0.
+    frame = CreateFrame("Frame", nil, Minimap)
     frame:SetAllPoints(Minimap)
     frame:SetFrameLevel(math.max(0, Minimap:GetFrameLevel() - 1))
+    frame:EnableMouse(false)
     frame:Hide()
     mask = frame:CreateMaskTexture()
-    mask:SetAllPoints(Minimap)
+    mask:SetAllPoints(frame)
     SetMask(mask, minimapMask)
-    sea = frame:CreateTexture(nil, "BACKGROUND")
+    local sea = frame:CreateTexture(nil, "BACKGROUND")
     sea:SetAllPoints()
     sea:SetColorTexture(unpack(SEA))
     sea:AddMaskTexture(mask)
-
-    hooksecurefunc(Minimap, "SetMaskTexture", function(_, path)
-        if settingMask then return end
-        -- Blizzard (rotation change) or a shape addon set a mask. Keep its shape for our terrain.
-        minimapMask = path
-        SetMask(mask, path)
-        if active then
-            settingMask = true
-            Minimap:SetMaskTexture(BLANK_MASK)
-            settingMask = false
-        end
-    end)
 
     local driver = CreateFrame("Frame")
     driver:SetScript("OnUpdate", Update)

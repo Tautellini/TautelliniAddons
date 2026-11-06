@@ -34,7 +34,7 @@ STYLES = {
         "forest": (190, 196, 150), "building": (220, 206, 186), "building_edge": (150, 132, 108),
         "cave": (110, 96, 80), "cave_edge": (90, 76, 60), "entrance": (93, 64, 55), "entrance_ring": (252, 248, 240),
         "ledge": (120, 98, 72), "lava": (226, 112, 58), "lava_edge": (168, 64, 32), "slime": (150, 184, 96), "slime_edge": (96, 128, 56),
-        "tar": (72, 62, 54), "tar_edge": (40, 34, 30),
+        "tar": (72, 62, 54), "tar_edge": (40, 34, 30), "city": (204, 140, 116), "city_edge": (146, 86, 64),
     },
     "clay": {
         "land": (228, 211, 186), "steep": (200, 168, 134), "steep_edge": (150, 112, 80),
@@ -45,7 +45,7 @@ STYLES = {
         "forest": (176, 182, 128), "building": (208, 186, 162), "building_edge": (136, 100, 72),
         "cave": (110, 76, 52), "cave_edge": (96, 60, 38), "entrance": (80, 46, 32), "entrance_ring": (250, 242, 228),
         "ledge": (112, 76, 50), "lava": (226, 112, 58), "lava_edge": (160, 62, 30), "slime": (150, 184, 96), "slime_edge": (96, 128, 56),
-        "tar": (70, 56, 46), "tar_edge": (40, 30, 24),
+        "tar": (70, 56, 46), "tar_edge": (40, 30, 24), "city": (198, 120, 92), "city_edge": (132, 62, 40),
     },
     "slate": {
         "land": (226, 227, 221), "steep": (197, 200, 191), "steep_edge": (146, 152, 144),
@@ -56,7 +56,7 @@ STYLES = {
         "forest": (180, 196, 172), "building": (206, 208, 204), "building_edge": (130, 136, 132),
         "cave": (90, 96, 100), "cave_edge": (70, 76, 80), "entrance": (60, 64, 70), "entrance_ring": (250, 250, 248),
         "ledge": (110, 116, 110), "lava": (226, 112, 58), "lava_edge": (160, 62, 30), "slime": (150, 184, 96), "slime_edge": (96, 128, 56),
-        "tar": (66, 66, 70), "tar_edge": (36, 36, 40),
+        "tar": (66, 66, 70), "tar_edge": (36, 36, 40), "city": (186, 150, 140), "city_edge": (120, 80, 70),
     },
 }
 SHADOW_OFFSET_PX = 3
@@ -95,6 +95,9 @@ OBSTACLE_THIN_YARDS = 2.0  # fences and walls thinner than this stay crisp lines
 OBSTACLE_ROUNDING_CELLS = 0.4  # blur that rounds the corners of chunky obstacles
 WALKABLE_WORDS = ("bridge", "dock", "pier", "stair", "ramp", "platform", "plank", "boardwalk", "walkway", "floor", "rug")
 OUTSIDE_FADE = 0.6  # opacity of the "outside" color over neighbor zones on the world map
+CAPITAL_UIMAPS = (1453, 1454, 1455, 1456, 1457, 1458)  # Stormwind, Orgrimmar, Ironforge, Thunder Bluff, Darnassus, Undercity
+CITY_FILL = 0.55  # opacity of the capital highlight on zone maps
+MIN_CITY_CELLS = 50
 MIN_LABEL_CELLS = 300  # subzones smaller than this (about 5000 square yards) get no label
 
 
@@ -307,6 +310,12 @@ def build(ui_map_id, data_dir):
     band_height = ndimage.uniform_filter(np.where(steep, ground, 0), 5) / np.maximum(near, 1e-6)
     ledge = ~steep & (near > 0) & (ground > band_height + LEDGE_RISE)
     in_zone = have & ((zone == zone_area) if zone_area else (zone != 0))  # a map without an area covers everything
+    # Capitals on zone maps: their own zone, highlighted so they stand apart from ordinary areas.
+    capital_regions = {int(r["AreaID"]): tuple(float(r[k]) for k in ("Region_0", "Region_1", "Region_3", "Region_4"))
+                       for r in csv.DictReader(open(assign_csv, encoding="utf-8"))
+                       if int(r["UiMapID"]) in CAPITAL_UIMAPS and r["OrderIndex"] == "0"}
+    capital_areas = set(capital_regions) - {zone_area}
+    city = have & np.isin(zone, list(capital_areas))
 
     # Crop to the map region plus a margin, in cells.
     ox, oy = tile_origin(tx.start, ty.start)
@@ -314,6 +323,7 @@ def build(ui_map_id, data_dir):
     c0, c1 = math.floor((oy - max_y) / UNIT), math.ceil((oy - min_y) / UNIT)
     pad = lambda a, v: np.pad(a, MARGIN, constant_values=v)[r0:r1 + 2 * MARGIN, c0:c1 + 2 * MARGIN]
     steep, water, in_zone, area = pad(steep, False), pad(water, True), pad(in_zone, False), pad(area, 0)
+    city, zone = pad(city, False) & ~water, pad(zone, 0)
     lava, slime, tar, ledge, sky = pad(lava, False), pad(slime, False), pad(tar, False), pad(ledge, False), pad(sky, False)
     road = ndimage.gaussian_filter(np.pad(road, 2 * MARGIN)[2 * r0:2 * (r1 + 2 * MARGIN), 2 * c0:2 * (c1 + 2 * MARGIN)], 1.0) > ROAD_MIN_WEIGHT
     road = drop_small(road & ~np.kron(water | sky, np.ones((2, 2), bool)), MIN_ROAD_PX)
@@ -326,6 +336,7 @@ def build(ui_map_id, data_dir):
 
     wmo_dir = os.path.join(data_dir, "extract", "wmo")
     kinds = {"building": [], "bridge": [], "cave": []}
+    city_models = {a: [] for a in capital_areas}  # giant models inside a capital's region are the capital itself
     entrances, caves = [], []
     wmo_names = wmo_area_names(db2_dir)
     for w in wmos.values():
@@ -344,9 +355,19 @@ def build(ui_map_id, data_dir):
             kind = "bridge" if BRIDGE_NAME in name.rsplit("/", 1)[-1] else "building"
             wx, wy = place(model_triangles(wmo_dir, w["fid"]), w)
             if wx.size and max(np.ptp(wx), np.ptp(wy)) > BUILDING_MAX_YARDS:
+                for a, (x0, y0, x1, y1) in capital_regions.items():
+                    if a in city_models and x0 <= w["pos"][0] <= x1 and y0 <= w["pos"][1] <= y1:
+                        city_models[a].append(to_px(wx, wy))
                 continue
             kinds[kind].append(to_px(wx, wy))
     geo = {k: rasterize(np.concatenate(v), shape_hi) if v else np.zeros(shape_hi, bool) for k, v in kinds.items()}
+    # Underground capitals (Ironforge, Undercity) have no terrain chunks of their own, so their model is their area.
+    for a, tris in city_models.items():
+        if tris:
+            cells = rasterize(np.concatenate(tris), shape_hi).reshape(steep.shape[0], SS, steep.shape[1], SS).any(axis=(1, 3))
+            cells &= ~water
+            city |= cells
+            zone = np.where(cells, a, zone)
 
     # Forest: ground covered by tree canopies. Each tree stamps a disc as wide as its model, so a few
     # giant jungle trees count as much as many small palms.
@@ -407,7 +428,22 @@ def build(ui_map_id, data_dir):
         r, c = np.unravel_index(depth.argmax(), depth.shape)
         labels.append({"r": (r + 0.5) * SS, "c": (c + 0.5) * SS, "area": int(a)})
 
-    return {"steep": steep & ~water & ~lava & ~slime & ~tar, "water": water, "lava": lava, "slime": slime, "tar": tar,
+    # Capital labels: the deepest point of each capital's largest piece of land on this map.
+    cities = []
+    visible = np.zeros_like(city)
+    visible[MARGIN:-MARGIN, MARGIN:-MARGIN] = True  # anchor labels inside the map, not in the render margin
+    for a in sorted(capital_areas):
+        pieces, n = ndimage.label(city & (zone == a) & visible)
+        if not n:
+            continue
+        sizes = ndimage.sum(pieces > 0, pieces, range(1, n + 1))
+        if sizes.max() < MIN_CITY_CELLS:
+            continue
+        depth = ndimage.distance_transform_edt(pieces == 1 + sizes.argmax())
+        r, c = np.unravel_index(depth.argmax(), depth.shape)
+        cities.append({"r": (r + 0.5) * SS, "c": (c + 0.5) * SS, "area": int(a)})
+
+    return {"city": city, "cities": cities, "steep": steep & ~water & ~lava & ~slime & ~tar, "water": water, "lava": lava, "slime": slime, "tar": tar,
             "ledge": ledge, "sky": sky,
             "in_zone": in_zone, "road": road, "forest": forest, "obstacle": obstacle, "entrances": entrances, "caves": caves, "labels": labels,
             "box": box, "map_id": int(map_id), **geo}
@@ -443,6 +479,9 @@ def render(masks, style, markers=True, fade=True):
     obstacle = masks["obstacle"] & ~water_hi
     paint(img, obstacle, s["steep"])
     paint(img, edge(obstacle, 0.6) & ~water_hi, s["steep_edge"])
+    city_hi = smooth(masks["city"], 2.0)  # area IDs come in 33-yard chunks, so round the steps off
+    paint(img, city_hi, s["city"], CITY_FILL)
+    paint(img, edge(city_hi, 1.25) & ~smooth(masks["water"], 0.8), s["city_edge"])
     building = masks["building"]
     b_shadow = ndimage.gaussian_filter(np.pad(building, ((4, 0), (4, 0)))[:-4, :-4].astype(np.float32), 3)
     paint(img, b_shadow * ~building, s["shadow"], 0.35)
@@ -478,7 +517,7 @@ def render(masks, style, markers=True, fade=True):
 def fade_overlay(masks, style):
     """RGBA image of the neighbor-zone fade alone, for the world map to lay over unfaded tiles."""
     zone_hi, water_hi = smooth(masks["in_zone"], 3.0), smooth(masks["water"], 0.8)
-    alpha = coverage(~zone_hi & ~water_hi) * OUTSIDE_FADE
+    alpha = coverage(~zone_hi & ~water_hi & ~smooth(masks["city"], 2.0)) * OUTSIDE_FADE  # capitals stay unfaded
     m = MARGIN * SS // 2
     rgba = np.empty(alpha.shape + (4,), np.uint8)
     rgba[..., :3] = STYLES[style]["outside"]

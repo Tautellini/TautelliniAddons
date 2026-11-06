@@ -4,6 +4,7 @@ Usage: py -3.13 export.py <uiMapID> <data_dir> <addon_dir> [clay|sand|slate]
 Writes <addon_dir>/Tiles/<uiMapID>/<row>_<col>.tga plus meta.json (grid, labels, cave entrances), then
 regenerates <addon_dir>/Tiles/Tiles.lua from every meta.json under <addon_dir>/Tiles/.
 """
+import csv
 import json
 import os
 import sys
@@ -12,13 +13,35 @@ from PIL import Image
 
 import preview
 from adt import UNIT
-from preview import build, fade_overlay, render
+from preview import CAPITAL_UIMAPS, build, fade_overlay, render
 from wdt import region_for
 
 TILE_PX = 512  # power of two, as the client requires
 COLS = 4
 FADE_PX = 256  # the neighbor-zone fade is soft, a small texture is enough
 TARGET_PX = 2560  # rendered width before resampling to the tile grid
+
+
+def essential_labels(db2_dir, ui_map_id):
+    """The areas Blizzard's own map art labels: its exploration overlays, placed at the center of their hit rect."""
+    rows = lambda t: csv.DictReader(open(os.path.join(db2_dir, t + ".csv"), encoding="utf-8"))
+    art = next((r["UiMapArtID"] for r in rows("UiMapXMapArt") if r["UiMapID"] == str(ui_map_id)), None)
+    if art is None:
+        return []
+    style = next(r["UiMapArtStyleID"] for r in rows("UiMapArt") if r["ID"] == art)
+    layer = min((r for r in rows("UiMapArtStyleLayer") if r["UiMapArtStyleID"] == style), key=lambda r: int(r["LayerIndex"]))
+    w, h = float(layer["LayerWidth"]), float(layer["LayerHeight"])
+    capitals = {r["AreaID"] for r in rows("UiMapAssignment") if int(r["UiMapID"]) in CAPITAL_UIMAPS}
+    out, seen = [], set()
+    for r in rows("WorldMapOverlay"):
+        area = r["AreaID_0"]
+        if r["UiMapArtID"] != art or area in ("0", "") or area in seen or area in capitals:
+            continue  # capitals get their own label style
+        seen.add(area)
+        x = (float(r["HitRectLeft"]) + float(r["HitRectRight"])) / 2 / w
+        y = (float(r["HitRectTop"]) + float(r["HitRectBottom"])) / 2 / h
+        out.append({"area": int(area), "x": x, "y": y})
+    return out
 
 
 def lua_string(s):
@@ -35,7 +58,8 @@ def write_index(tiles_dir):
     for m, meta in sorted(metas.items()):
         b = ", ".join(f"{v:.3f}" for v in meta["bounds"])
         lines.append(f"    [{m}] = {{ rows = {meta['rows']}, cols = {meta['cols']}, map = {meta['map']}, bounds = {{ {b} }},")
-        lines.append("        labels = { " + " ".join(f"{{ {l['area']}, {l['x']:.4f}, {l['y']:.4f} }}," for l in meta["labels"]) + " },")
+        for key in ("labels", "essential", "cities"):
+            lines.append(f"        {key} = {{ " + " ".join(f"{{ {l['area']}, {l['x']:.4f}, {l['y']:.4f} }}," for l in meta.get(key, [])) + " },")
         lines.append("        caves = { " + " ".join(f"{{ {c['area']}, {c['x']:.4f}, {c['y']:.4f}, {lua_string(c['name'])} }}," for c in meta["caves"]) + " },")
         lines.append("    },")
     lines.append("}")
@@ -72,8 +96,13 @@ def main(ui_map_id, data_dir, addon_dir, style="clay", index=True):
     inside = lambda q: 0 <= q["x"] <= 1 and 0 <= q["y"] <= 1
     labels = [q for q in ({"area": p["area"], **norm(p)} for p in masks["labels"]) if inside(q)]
     caves = [q for q in ({"area": p["area"], "name": p["name"], **norm(p)} for p in masks["caves"]) if inside(q)]
+    # Keep capital labels clear of the map edge, where the text would be cut off.
+    clamp = lambda q: {**q, "x": min(max(q["x"], 0.06), 0.94), "y": min(max(q["y"], 0.03), 0.97)}
+    cities = [clamp(q) for q in ({"area": p["area"], **norm(p)} for p in masks["cities"]) if inside(q)]
+    essential = essential_labels(os.path.join(data_dir, "db2"), ui_map_id)
     min_x, min_y, max_x, max_y = region_for(os.path.join(data_dir, "db2", "UiMapAssignment.csv"), ui_map_id)
-    meta = {"rows": rows, "cols": COLS, "map": masks["map_id"], "bounds": [min_x, min_y, max_x, max_y], "labels": labels, "caves": caves}
+    meta = {"rows": rows, "cols": COLS, "map": masks["map_id"], "bounds": [min_x, min_y, max_x, max_y],
+            "labels": labels, "essential": essential, "cities": cities, "caves": caves}
     json.dump(meta, open(os.path.join(out, "meta.json"), "w", encoding="utf-8"), indent=1)
     if index:
         write_index(os.path.join(addon_dir, "Tiles"))
