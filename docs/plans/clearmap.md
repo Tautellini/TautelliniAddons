@@ -204,6 +204,13 @@ Facts confirmed in the spike:
 
 1. **Extraction.** Solved: TACTTool reads the `wowf` product (see "Running the pipeline").
 2. **Cities.** Decided from renders on 2026-11-06. Stormwind, Orgrimmar, Ironforge and Undercity are each one giant WMO. Drawn as a footprint they cover the whole city, and without them only bare terrain is left. They keep Blizzard's art (`CITY_MAPS` in `export_all.py`), and the minimap falls back there too. Thunder Bluff renders well from terrain, tents and bridges and is included. On zone maps, any building model wider than 250 yards is left out, so Orgrimmar, Ironforge, Undercity and Blackrock Mountain show their terrain instead of a blob.
+   **Todo: redraw the model-built capitals from their floors.** The user asked about Undercity on 2026-11-06 and wanted a test render first. The prototype lives in `C:\dev\mapgen-data\prototype\city\` (`uc_layers.py`), and the comparison with Blizzard's map is `C:\dev\mapgen-data\preview\undercity-test.png`. How it works:
+   - Every up-facing triangle of the city model is rasterized at 0.5 yd per cell. Each cell keeps all of its floor layers, not only the top one, because roofs and beams would hide the floors below.
+   - Layers of neighboring cells join when the height step is at most 1.5 yd. The biggest joined region is the city floor. Other regions count only if they meet the outdoor ground at their own height, which brings in the Ruins of Lordaeron (the elevators are not part of the model). Wall tops and roofs drop out by themselves.
+   - The city floor wins over other regions in the same cell. Liquid tiles count only above a reachable floor. Level steps over 2 yd get a ledge line and a soft shadow.
+   - Names come from `WMOAreaTable` through each group's ID (MOGP + 0x38). All of them point to AreaTable 1497, and AreaTable has no rows for the quarters (checked, no child areas of 1497). Only Ruins of Lordaeron has its own area (153), so it can be labeled live. The quarter labels would ship in English unless another source turns up.
+
+   Still open: move the prototype into `tools/mapgen`, export 1458 and drop it from `CITY_MAPS`, then try Stormwind, Orgrimmar and Ironforge. Those three mix terrain and model floors, so they need the terrain pass and the model pass merged.
 3. **Dungeons and raids.** Default: out of v1.
 4. **Slope limit.** The commonly cited walk limit is about 50 degrees. Verify in game.
 5. **Road detection.** Checked on all continents. Road textures match "road", "cobble", "street", "path" or "trail" (Elwynn, Westfall and Duskwood use cobblestone). Eastern Kingdoms roads are painted at about half strength, so the threshold is 0.3 instead of 0.5.
