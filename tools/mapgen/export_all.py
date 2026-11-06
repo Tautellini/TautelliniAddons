@@ -11,14 +11,12 @@ from multiprocessing import Pool
 import export
 
 WORKERS = 3  # at 1.5 yards per pixel the largest zones need several GB of rasters each
-# Capital cities are mostly one giant building model, so terrain says little about their streets.
-# They keep Blizzard's art (spec open question 2). Thunder Bluff and Darnassus render well and are included.
-CITY_MAPS = {1453, 1454, 1455, 1458}  # Stormwind, Orgrimmar, Ironforge, Undercity
 
 
 def zone_ids(data_dir):
+    """Every zone map, the four model-built capitals included (export.py draws them with city.py)."""
     return [int(r["ID"]) for r in csv.DictReader(open(os.path.join(data_dir, "db2", "UiMap.csv"), encoding="utf-8"))
-            if r["Type"] == "3" and int(r["ID"]) not in CITY_MAPS]
+            if r["Type"] == "3"]
 
 
 def run(args):

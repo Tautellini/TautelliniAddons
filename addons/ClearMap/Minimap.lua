@@ -73,11 +73,13 @@ local function PlayerWorldPosition()
 end
 
 local function Update()
-    if not (ns.db.enabled and ns.db.minimap) or IsIndoors() or C_CVar.GetCVarBool("rotateMinimap") then
+    if not (ns.db.enabled and ns.db.minimap) or C_CVar.GetCVarBool("rotateMinimap") then
         return UseOurTerrain(false)
     end
     local mapID, here, wx, wy = PlayerWorldPosition()
-    if not mapID then
+    -- Indoors only the capitals have fitting tiles, since theirs are drawn from the floors of their buildings.
+    local indoors = IsIndoors()
+    if not mapID or (indoors and not here.indoor) then
         return UseOurTerrain(false)
     end
     -- Minimap addons move, rescale and re-level the minimap, so follow it every frame.
@@ -86,7 +88,8 @@ local function Update()
         clip:SetFrameLevel(level)
         frame:SetFrameLevel(level) -- a child defaults to one above its parent, which would be the minimap's own level
     end
-    local yards = VIEW_YARDS[Minimap:GetZoom()] or VIEW_YARDS[0]
+    -- Indoors the minimap zooms in closer, and the game reports that view directly.
+    local yards = indoors and 2 * C_Minimap.GetViewRadius() or VIEW_YARDS[Minimap:GetZoom()] or VIEW_YARDS[0]
     local k, half = frame:GetWidth() / yards, yards / 2 -- our own units, which differ from the minimap's when it is scaled
     if k <= 0 then
         return UseOurTerrain(false)

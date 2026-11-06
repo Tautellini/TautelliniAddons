@@ -62,6 +62,7 @@ C_Map = {
     GetPlayerMapPosition = function() return { GetXY = function() return 0.55, 0.45 end } end,
 }
 C_CVar = { GetCVarBool = function() return false end }
+C_Minimap = { GetViewRadius = function() return 150 end }
 C_Texture = { GetAtlasInfo = function(name) return name == "ui-hud-minimap-frame-generic-mask" and {} or nil end }
 GameTooltip = NewWidget("GameTooltip")
 GameFontNormal = NewWidget("Font")
@@ -169,6 +170,16 @@ for _, key in ipairs({ "labelBackground", "cities", "caves", "minimap", "enabled
 end
 explorationPin:RefreshOverlays()
 
+-- A capital whose district names ship as text (Undercity), in every label mode.
+WorldMapFrame.mapID = 1458
+for _, mode in ipairs({ 1, 2 }) do
+    ns.settings.areaNames:SetValue(mode)
+    WorldMapFrame:RefreshDetailLayers()
+end
+local named = 0
+for _, f in ipairs(eventFrames) do if f.text and f.text.text == "TRADE QUARTER" then named = named + 1 end end
+assert(named > 0, "Undercity's district names did not reach a label")
+
 -- A map without tiles.
 WorldMapFrame.mapID = 1414
 WorldMapFrame:RefreshDetailLayers()
@@ -208,6 +219,11 @@ assert(Minimap.mask == "Interface\\AddOns\\ClearMap\\Media\\blank", "blank mask 
 IsIndoors = function() return true end
 driver.scripts.OnUpdate(driver, 0.016)
 assert(Minimap.mask == 130937, "indoors should restore the addon's own mask, got " .. tostring(Minimap.mask))
+-- Indoors in a capital the city tiles stay, since they show the floors of its buildings.
+ns.tiles[1411].indoor = true
+driver.scripts.OnUpdate(driver, 0.016)
+assert(Minimap.mask == "Interface\\AddOns\\ClearMap\\Media\\blank", "indoors in a capital should keep the city tiles")
+ns.tiles[1411].indoor = nil
 IsIndoors = function() return false end
 driver.scripts.OnUpdate(driver, 0.016)
 

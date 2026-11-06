@@ -6,7 +6,8 @@ ClearMap replaces the painted zone maps of WoW Forever with clear maps generated
 
 ### Features
 
-*   47 zone maps redrawn: all of Kalimdor and the Eastern Kingdoms, plus Mount Hyjal, Riverglades, Shen'dralas and Zephras Isle
+*   51 zone maps redrawn: all of Kalimdor and the Eastern Kingdoms, plus Mount Hyjal, Riverglades, Shen'dralas and Zephras Isle
+*   Stormwind, Orgrimmar, Ironforge and Undercity drawn from the floors of their buildings, with their districts named
 *   Walkable ground and cliffs, with a heavier line on cliff tops where you can jump down
 *   Roads and paths, bridges, buildings, forests, large rocks and fences
 *   Water, lava, slime and tar pits, each in its own color
@@ -72,8 +73,8 @@ Find them on the map or under Options > AddOns > ClearMap.
 
 ### Good to know
 
-*   Stormwind, Orgrimmar, Ironforge and Undercity keep Blizzard's own city maps. Each of them is built as one giant model, so the terrain says little about their streets. They are highlighted on the zone maps around them.
-*   The minimap falls back to Blizzard's minimap indoors, in dungeons and raids, in those four capitals and while "Rotate Minimap" is on.
+*   District names in Stormwind, Orgrimmar, Ironforge and Undercity are in English. The game has no translations of them that addons can read.
+*   The minimap falls back to Blizzard's minimap in buildings and caves outside the capitals, in dungeons and raids and while "Rotate Minimap" is on.
 *   Dungeon, raid and continent maps keep Blizzard's art.
 
 ***
