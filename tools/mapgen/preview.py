@@ -99,7 +99,8 @@ OUTSIDE_FADE = 0.6  # opacity of the "outside" color over neighbor zones on the 
 CAPITAL_UIMAPS = (1453, 1454, 1455, 1456, 1457, 1458)  # Stormwind, Orgrimmar, Ironforge, Thunder Bluff, Darnassus, Undercity
 CITY_FILL = 0.55  # opacity of the capital highlight on zone maps
 MIN_CITY_CELLS = 50
-MIN_LABEL_CELLS = 300  # subzones smaller than this (about 5000 square yards) get no label
+MIN_LABEL_CELLS = 300
+MIN_CITY_LABEL_CELLS = 25  # city districts are small; about 430 square yards  # subzones smaller than this (about 5000 square yards) get no label
 
 
 def wmo_area_names(db2_dir):
@@ -423,7 +424,7 @@ def build(ui_map_id, data_dir):
         if not n:
             continue
         sizes = ndimage.sum(pieces > 0, pieces, range(1, n + 1))
-        if sizes.max() < MIN_LABEL_CELLS:
+        if sizes.max() < (MIN_CITY_LABEL_CELLS if int(ui_map_id) in CAPITAL_UIMAPS else MIN_LABEL_CELLS):
             continue
         depth = ndimage.distance_transform_edt(pieces == 1 + sizes.argmax())
         r, c = np.unravel_index(depth.argmax(), depth.shape)

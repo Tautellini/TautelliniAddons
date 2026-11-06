@@ -151,7 +151,8 @@ assert(eventFrame, "no event frame")
 ClearMapDB = { enabled = true, labels = true } -- an old 1.x setting, to test the migration
 local onEvent = eventFrame.scripts.OnEvent
 onEvent(eventFrame, "ADDON_LOADED", "ClearMap")
-assert(ClearMapDB.labels == nil and ClearMapDB.areaNames == 2, "label migration failed")
+assert(ClearMapDB.labels == nil and ClearMapDB.areaNames == 1 and ClearMapDB.labelBackground == false and ClearMapDB.version == 2,
+    "settings migration failed")
 onEvent(eventFrame, "PLAYER_LOGIN")
 
 -- World map refresh with every label mode and option.

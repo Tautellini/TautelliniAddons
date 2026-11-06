@@ -17,8 +17,10 @@ local LABEL_STYLES = {
 local LABEL_GROWTH = 1.6 -- size at full zoom relative to fully zoomed out
 local BOX_PAD_X, BOX_PAD_Y = 4, 2
 local AREA_OFF, AREA_ESSENTIAL, AREA_ALL = 0, 1, 2
-local defaults = { enabled = true, minimap = true, cities = true, caves = true, areaNames = AREA_OFF,
-    labelBackground = true, labelBackgroundOpacity = 50 }
+local defaults = { enabled = true, minimap = true, cities = true, caves = true, areaNames = AREA_ESSENTIAL,
+    labelBackground = false, labelBackgroundOpacity = 50 }
+-- Bumped when defaults change in a way existing users should get once (see ADDON_LOADED).
+local SETTINGS_VERSION = 2
 
 -- Our textures per Blizzard detail layer frame. Kept in our own table so no Blizzard table is written to.
 local layerTextures = {}
@@ -302,6 +304,12 @@ function frame:ADDON_LOADED(name)
             ClearMapDB.areaNames = ClearMapDB.labels and AREA_ALL or AREA_OFF
             ClearMapDB.labels = nil
         end
+        if (ClearMapDB.version or 1) < 2 then
+            -- Version 2 made Essential area names and no label background the defaults. Apply them once.
+            ClearMapDB.areaNames = AREA_ESSENTIAL
+            ClearMapDB.labelBackground = false
+        end
+        ClearMapDB.version = SETTINGS_VERSION
         for key, value in pairs(defaults) do
             if ClearMapDB[key] == nil then
                 ClearMapDB[key] = value

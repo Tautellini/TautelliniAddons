@@ -21,7 +21,8 @@ from wdt import region_for
 TILE_PX = 1024  # power of two, as the client requires
 YARDS_PER_PX = 1.5  # every map gets the same sharpness, so large zones are as crisp as small ones
 FADE_PX = 256  # the neighbor-zone fade is soft, a small texture is enough
-MAX_SS = 8
+MAX_SS = 16  # only small maps reach this, large zones stay at 6 to 8
+MIN_GRID = 2  # small maps such as city maps still get 2048 pixels, since the world map zooms in about 3 times
 LINE_REFERENCE_PX = 2560  # the render width the approved line weights were tuned at
 
 
@@ -73,8 +74,8 @@ def write_index(tiles_dir):
 def grid_for(ui_map_id, data_dir):
     """(rows, cols, supersampling) for a map: enough 1024-pixel tiles for YARDS_PER_PX, rendered at least that large."""
     min_x, min_y, max_x, max_y = region_for(os.path.join(data_dir, "db2", "UiMapAssignment.csv"), ui_map_id)
-    cols = max(1, math.ceil((max_y - min_y) / YARDS_PER_PX / TILE_PX))
-    rows = max(1, math.ceil((max_x - min_x) / YARDS_PER_PX / TILE_PX))
+    cols = max(MIN_GRID, math.ceil((max_y - min_y) / YARDS_PER_PX / TILE_PX))
+    rows = max(MIN_GRID, math.ceil((max_x - min_x) / YARDS_PER_PX / TILE_PX))
     out_px_per_cell = cols * TILE_PX / ((max_y - min_y) / UNIT)
     # Even, so output pixels map to whole supersampled pixels. Rounded up, so tiles are only ever downsampled.
     return rows, cols, int(min(MAX_SS, max(2, 2 * math.ceil(out_px_per_cell))))
@@ -105,7 +106,8 @@ def main(ui_map_id, data_dir, addon_dir, style="clay", index=True):
     # Keep capital labels clear of the map edge, where the text would be cut off.
     clamp = lambda q: {**q, "x": min(max(q["x"], 0.06), 0.94), "y": min(max(q["y"], 0.03), 0.97)}
     cities = [clamp(q) for q in ({"area": p["area"], **norm(p)} for p in masks["cities"]) if inside(q)]
-    essential = essential_labels(os.path.join(data_dir, "db2"), ui_map_id)
+    # City maps (Thunder Bluff, Darnassus) have no exploration overlays, so their districts are the essential set.
+    essential = essential_labels(os.path.join(data_dir, "db2"), ui_map_id) or labels
     min_x, min_y, max_x, max_y = region_for(os.path.join(data_dir, "db2", "UiMapAssignment.csv"), ui_map_id)
     meta = {"rows": rows, "cols": cols, "map": masks["map_id"], "bounds": [min_x, min_y, max_x, max_y],
             "labels": labels, "essential": essential, "cities": cities, "caves": caves}
