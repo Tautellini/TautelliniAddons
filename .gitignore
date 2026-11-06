@@ -9,3 +9,7 @@
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# mapgen pipeline
+__pycache__/
+cache/
