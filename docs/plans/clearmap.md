@@ -1,6 +1,6 @@
 # ClearMap
 
-Status (2026-11-06): all 47 zone maps are exported, every layer from the spec is in, and each map was reviewed from its stitched QA image. Capitals made of one giant model (Stormwind, Orgrimmar, Ironforge, Undercity) keep Blizzard's art. Tested in game: the first build with Durotar (tile swap, explored overlays hidden, toggle button, `/clearmap`), then cave pins and area labels, which the user asked to make smaller and off by default. Not yet tested in game: the settings panel, the minimap, the neighbor-zone fade overlay and every map other than Durotar. Target client: WoW Forever (Interface 16001). "ClearMap" is a working name.
+Status (2026-11-06): 1.0.0 prepared for CurseForge: `assets/ClearMap/` holds the logo, description (`curseforge.md`) and changelog, and `.release/ClearMap-1.0.0.zip` (62.5 MB, built from the addon folder because the tiles are gitignored) is the upload. All 47 zone maps are exported, every layer from the spec is in, and each map was reviewed from its stitched QA image. Capitals made of one giant model (Stormwind, Orgrimmar, Ironforge, Undercity) keep Blizzard's art. Tested in game: the first build with Durotar (tile swap, explored overlays hidden, toggle button, `/clearmap`), then cave pins and area labels, which the user asked to make smaller and off by default. Not yet tested in game: the settings panel, the minimap, the neighbor-zone fade overlay and every map other than Durotar. Target client: WoW Forever (Interface 16001). "ClearMap" is a working name.
 
 ## Goal
 
@@ -210,7 +210,7 @@ Facts confirmed in the spike:
 6. **Resolution and size.** Pick yards per pixel and the file format (TGA or BLP) after the Durotar milestone. Rough guess for the world map: 70 MB as compressed BLP, about 400 MB as TGA.
 7. **Minimap.** Confirm the blank-mask trick and the zoom radius tables on Forever.
 8. **Explored overlays.** Find how Forever draws them and how to hide them cleanly. Blocks the Durotar milestone.
-9. **Public release.** Shipping files built from Blizzard data is a ToS gray area. Decide before any upload.
+9. **Public release.** Shipping files built from Blizzard data is a ToS gray area. The user asked to prepare the CurseForge release on 2026-11-06. The tiles are drawn from terrain geometry and object placements, not copied from Blizzard's map art.
 10. **Cave entrance detection.** Solved: an entrance is the center of each WMO portal that joins an exterior group (flag `0x8`) to an interior group (flag `0x2000`). Open dens without portals get one marker at their center. Terrain holes were tried first but miss caves cut into cliff faces. The area ID under each entrance gives the pin's name.
 
 ## Done criteria

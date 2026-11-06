@@ -1,8 +1,8 @@
 ## Interface: 16001
 ## Title: ClearMap
-## Notes: Clean world map tiles generated from the game's terrain
+## Notes: A clean world map and minimap, redrawn from the game's terrain: where you can walk, cliffs, roads and caves.
 ## Author: Tautellini
-## Version: @project-version@
+## Version: 1.0.0
 ## SavedVariables: ClearMapDB
 
 Tiles\Tiles.lua
