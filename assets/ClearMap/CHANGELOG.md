@@ -5,7 +5,7 @@
 First release.
 
 - 51 zone maps redrawn from the game's terrain: Kalimdor, the Eastern Kingdoms, Mount Hyjal, Riverglades, Shen'dralas and Zephras Isle
-- Stormwind, Orgrimmar, Ironforge and Undercity drawn from the floors of their buildings, with district names, also on the minimap
+- Stormwind, Orgrimmar, Ironforge and Undercity drawn from the floors of their buildings, with district names, also on the minimap. The City maps option turns them off.
 - Walkable ground, cliffs with drop-down edges, roads, bridges, buildings, forests, large obstacles
 - Water, lava, slime and tar pits
 - Cave entrances as pins with the cave's name

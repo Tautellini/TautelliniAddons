@@ -61,7 +61,7 @@ end
 -- Position of the player in world yards (x north, y west), from the zone map position.
 local function PlayerWorldPosition()
     local mapID = C_Map.GetBestMapForUnit("player")
-    local here = mapID and ns.tiles[mapID]
+    local here = ns.GridFor(mapID)
     local pos = here and C_Map.GetPlayerMapPosition(mapID, "player")
     if not pos then return end
     local px, py = pos:GetXY()
@@ -77,7 +77,7 @@ local function Update()
     local mapID, here, wx, wy = PlayerWorldPosition()
     -- Indoors only the capitals have fitting tiles, since theirs are drawn from the floors of their buildings.
     local indoors = IsIndoors()
-    if not mapID or (indoors and not here.indoor) then
+    if not mapID or (indoors and not here.city) then
         return UseOurTerrain(false)
     end
     -- Minimap addons move, rescale and re-level the minimap, so follow it every frame.
@@ -125,7 +125,7 @@ local function Update()
 
     -- Neighbor zones fill the view near borders. The current zone is drawn on top of them.
     for id, grid in pairs(ns.tiles) do
-        if id ~= mapID and grid.map == here.map then
+        if id ~= mapID and grid.map == here.map and ns.GridFor(id) then
             Draw(id, grid, 0)
         end
     end

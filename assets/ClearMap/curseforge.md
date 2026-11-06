@@ -54,6 +54,7 @@ Find them on the map or under Options > AddOns > ClearMap.
 | Setting                  | Default   | What it does                                                    |
 | ------------------------ | --------- | --------------------------------------------------------------- |
 | Clear map                | on        | shows ClearMap's maps instead of Blizzard's                     |
+| City maps                | on        | draws Stormwind, Orgrimmar, Ironforge and Undercity too, on the map and the minimap |
 | Capital cities           | on        | highlights capitals and labels them in their own style          |
 | Cave entrances           | on        | shows a pin at every cave entrance                              |
 | Minimap                  | on        | uses ClearMap's map on the minimap too                          |

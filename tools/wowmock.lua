@@ -163,7 +163,7 @@ for _, mode in ipairs({ 0, 1, 2 }) do
     WorldMapFrame:OnCanvasScaleChanged()
 end
 ns.settings.labelBackgroundOpacity:SetValue(80)
-for _, key in ipairs({ "labelBackground", "cities", "caves", "minimap", "enabled" }) do
+for _, key in ipairs({ "labelBackground", "cityMaps", "cities", "caves", "minimap", "enabled" }) do
     ns.settings[key]:SetValue(false)
     WorldMapFrame:RefreshDetailLayers()
     ns.settings[key]:SetValue(true)
@@ -220,10 +220,15 @@ IsIndoors = function() return true end
 driver.scripts.OnUpdate(driver, 0.016)
 assert(Minimap.mask == 130937, "indoors should restore the addon's own mask, got " .. tostring(Minimap.mask))
 -- Indoors in a capital the city tiles stay, since they show the floors of its buildings.
-ns.tiles[1411].indoor = true
+ns.tiles[1411].city = true
 driver.scripts.OnUpdate(driver, 0.016)
 assert(Minimap.mask == "Interface\\AddOns\\ClearMap\\Media\\blank", "indoors in a capital should keep the city tiles")
-ns.tiles[1411].indoor = nil
+-- With city maps off, a capital's minimap goes back to Blizzard.
+ns.settings.cityMaps:SetValue(false)
+driver.scripts.OnUpdate(driver, 0.016)
+assert(Minimap.mask == 130937, "city maps off should give the capital's minimap back to Blizzard")
+ns.settings.cityMaps:SetValue(true)
+ns.tiles[1411].city = nil
 IsIndoors = function() return false end
 driver.scripts.OnUpdate(driver, 0.016)
 
