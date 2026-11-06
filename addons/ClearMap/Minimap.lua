@@ -1,7 +1,5 @@
 local _, ns = ...
 
--- Diameter of the minimap view in yards per outdoor zoom level, as used by HereBeDragons for Mainline clients.
-local VIEW_YARDS = { [0] = 466 + 2 / 3, 400, 333 + 1 / 3, 266 + 2 / 6, 200, 133 + 1 / 3 }
 local BLANK_MASK = "Interface\\AddOns\\ClearMap\\Media\\blank"
 local SQUARE_MASK = "Interface\\Buttons\\WHITE8X8"
 local TILE_PATH = "Interface\\AddOns\\ClearMap\\Tiles\\%d\\%d_%d"
@@ -88,9 +86,10 @@ local function Update()
         clip:SetFrameLevel(level)
         frame:SetFrameLevel(level) -- a child defaults to one above its parent, which would be the minimap's own level
     end
-    -- Indoors the minimap zooms in closer, and the game reports that view directly.
-    local yards = indoors and 2 * C_Minimap.GetViewRadius() or VIEW_YARDS[Minimap:GetZoom()] or VIEW_YARDS[0]
-    local k, half = frame:GetWidth() / yards, yards / 2 -- our own units, which differ from the minimap's when it is scaled
+    -- How far the minimap sees, in yards from its center. The game reports it for the current zoom, the indoor view
+    -- and the minimap's size, so blips and tiles move together. HereBeDragons uses the same call.
+    local half = C_Minimap.GetViewRadius()
+    local k = half and half > 0 and frame:GetWidth() / (2 * half) or 0 -- our own units, which differ from the minimap's when it is scaled
     if k <= 0 then
         return UseOurTerrain(false)
     end
