@@ -1,6 +1,6 @@
 # ClearMap
 
-Status: pipeline spike in progress (2026-11-06). Durotar renders with ground, cliffs, water and roads. Buildings, trees and caves are next. No addon code yet. Target client: WoW Forever (Interface 16001). "ClearMap" is a working name.
+Status: pipeline spike in progress (2026-11-06). Durotar renders with ground, cliffs, water, roads, forests, buildings, bridges, cave outlines and cave entrances. Drop-down edges and large obstacles are still missing. No addon code yet. Target client: WoW Forever (Interface 16001). "ClearMap" is a working name.
 
 ## Goal
 
@@ -122,6 +122,10 @@ Facts confirmed in the spike:
 - MAID entries are row major (`[y][x]`). The MCNK position check in `adt.py` passes on every Durotar tile.
 - Kalimdor's WDT has MPHD flags `0x3ca`, so alpha maps are 64 x 64 bytes and may be compressed.
 - Road textures are named like `durotarroad_s.blp`, `barrensroad01_s.blp`, `kalidarroad_s.blp` and `orgrim_road_01_s.blp`.
+- obj0 placements use file IDs (MDDF flag `0x40`, MODF flag `0x8`). Objects that cross a tile border appear in each tile with the same unique ID, so placements are deduplicated by it.
+- WMO yaw is the stored Y rotation plus 180 degrees, with no mirroring. `test_objects.py` checks this against the stored extents (233 placements, worst error 0.1 yards). About 1 in 8 placements is tilted and drawn untilted.
+- Caves are WMOs under `world/wmo/dungeon/` whose path contains cave, mine, den, tunnel, barrow or wailing. Shipwrecks and ruins share that folder and are excluded.
+- Trees are M2s whose file name contains "tree" or "palm". Forests are areas where the smoothed tree density passes a threshold.
 
 ### Addon (`addons/ClearMap/`, from `templates/ForeverAddonTemplate`)
 
@@ -174,7 +178,7 @@ Facts confirmed in the spike:
 7. **Minimap.** Confirm the blank-mask trick and the zoom radius tables on Forever.
 8. **Explored overlays.** Find how Forever draws them and how to hide them cleanly. Blocks the Durotar milestone.
 9. **Public release.** Shipping files built from Blizzard data is a ToS gray area. Decide before any upload.
-10. **Cave entrance detection.** The user's main complaint, with no proven method yet. Candidates: the portals between a WMO's indoor and outdoor groups, or the point where the cave's interior volume meets the terrain surface. The first spike covers this together with extraction.
+10. **Cave entrance detection.** Solved: an entrance is the center of each WMO portal that joins an exterior group (flag `0x8`) to an interior group (flag `0x2000`). Open dens without portals get one marker at their center. Terrain holes were tried first but miss caves cut into cliff faces. The area ID under each entrance gives the pin's name.
 
 ## Done criteria
 
