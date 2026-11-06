@@ -1,6 +1,6 @@
 # ClearMap
 
-Status: pipeline spike in progress (2026-11-06). Durotar renders with ground, cliffs, water, roads, forests, buildings, bridges, cave outlines and cave entrances. Drop-down edges and large obstacles are still missing. First addon build (tile swap, hidden explored overlays, toggle button, `/clearmap`) tested in game on 2026-11-06 with Durotar, the user reported "lgtm". Labels, cave pins and the minimap are not built yet. Target client: WoW Forever (Interface 16001). "ClearMap" is a working name.
+Status (2026-11-06): all 47 zone maps are exported, every layer from the spec is in, and each map was reviewed from its stitched QA image. Capitals made of one giant model (Stormwind, Orgrimmar, Ironforge, Undercity) keep Blizzard's art. Tested in game: the first build with Durotar (tile swap, explored overlays hidden, toggle button, `/clearmap`), then cave pins and area labels, which the user asked to make smaller and off by default. Not yet tested in game: the settings panel, the minimap, the neighbor-zone fade overlay and every map other than Durotar. Target client: WoW Forever (Interface 16001). "ClearMap" is a working name.
 
 ## Goal
 
@@ -22,8 +22,10 @@ From the planning session on 2026-11-06.
 | Unexplored areas | Show everything. No fog of war. |
 | Caves and tunnels | Entrance marker plus a dashed outline of the passages underneath. |
 | Toggle | Button on the world map to switch back to the Blizzard map. |
-| Minimap | In v1. The user kept it after pushback about the extra work. |
-| Labels | Drawn live in game, in the client language. |
+| Minimap | In v1. The user kept it after pushback about the extra work. Rotating minimap falls back to Blizzard's terrain in v1. |
+| Scope | 2026-11-06 the user set the goal "finish this addon, all maps, check the quality yourself". All 51 zone maps (UiMap type 3) are exported, and each is reviewed from its stitched QA image before release. |
+| Labels | Drawn live in game, in the client language. Off by default after the first in-game look: "the area labels should be off by default and should be a configurable toggle". The toggle is a checkbox in Options > AddOns > ClearMap. |
+| Cave pins | Our own frames on the map canvas, counter-scaled so they keep their size when zooming. 11 px, made "slightly smaller" after the first in-game look. Not a Blizzard data provider, so no addon code runs inside Blizzard's map refresh. |
 | Corrections | Fully automatic. No hand-fix files. Errors are tuned globally. |
 | Release scope | All outdoor zones in the first release. The pipeline is proven on Durotar before scaling. The user plays Horde, so Horde zones come first. |
 
@@ -121,6 +123,10 @@ py -3.13 <repo>/tools/mapgen/export.py 1411 C:/dev/mapgen-data <repo>/addons/Cle
 
 Known limit: the addon draws its grid on every detail layer of a map. Zone maps have one layer. Fix this before continent maps get tiles.
 
+For all maps: `wdt.py <wdt> <csv> all <map> tiles-<map>.txt extract/<map>` lists every tile of a continent and skips files already extracted, so rerunning it after a CDN timeout only fetches what is missing. `objects.py <data_dir> <map> roots|groups|m2` does the same for WMO roots, WMO groups and M2 props. `export_all.py <data_dir> <addon_dir>` exports every zone map with six worker processes and writes `Tiles.lua` once at the end. `qa.py <addon_dir> <out_dir>` stitches each map's tiles and fade back together for review.
+
+Each map is rendered at about 2560 pixels across before it is resampled to the 2048-pixel tile grid. The supersampling factor is picked per map (2 for the Barrens, 4 for Durotar, up to 8 for small cities), so line weights look the same on every map.
+
 Facts confirmed in the spike:
 
 - Kalimdor is map 1 with WDT file ID 782779. Durotar is UI map 1411, the Barrens 1413, Kalimdor 1414. Durotar covers ADT tiles x 35 to 45, y 28 to 35.
@@ -128,9 +134,17 @@ Facts confirmed in the spike:
 - Kalimdor's WDT has MPHD flags `0x3ca`, so alpha maps are 64 x 64 bytes and may be compressed.
 - Road textures are named like `durotarroad_s.blp`, `barrensroad01_s.blp`, `kalidarroad_s.blp` and `orgrim_road_01_s.blp`.
 - obj0 placements use file IDs (MDDF flag `0x40`, MODF flag `0x8`). Objects that cross a tile border appear in each tile with the same unique ID, so placements are deduplicated by it.
-- WMO yaw is the stored Y rotation plus 180 degrees, with no mirroring. `test_objects.py` checks this against the stored extents (233 placements, worst error 0.1 yards). About 1 in 8 placements is tilted and drawn untilted.
+- WMO yaw is the stored Y rotation plus 180 degrees, with no mirroring. `test_objects.py` checks this against the stored extents: on both continents all 3087 upright placements lie inside their extents and 98.6 % fit within half a yard. The rest (Thunder Bluff's mesas, moonwells, goblin gates) have extents that also cover their decoration. About 1 in 8 placements is tilted and drawn untilted.
 - Caves are WMOs under `world/wmo/dungeon/` whose path contains cave, mine, den, tunnel, barrow or wailing. Shipwrecks and ruins share that folder and are excluded.
 - Trees are M2s whose file name contains "tree" or "palm". Forests are areas where the smoothed tree density passes a threshold.
+- Large obstacles are M2 props with collision (MD20 collision index count at offset 216) whose collision box (offset 188) is at least 4 yards long and 2 yards tall. They are drawn as the rotated box. Boxes at least 2 yards thick are rounded (rocks, mounds, crystals), thinner ones stay crisp lines (fences, walls). Trees and walkable props (bridge, dock, pier, stair, ramp, platform and similar names) are skipped.
+- Forever's new models have only placeholder names in the listfile (`models/unknown/...`) and an empty internal name. Such a model counts as a tree when it is at least 10 yards tall and its collision covers less than 35 % of its footprint (a trunk under a canopy). Without this, Forever's Elwynn trees were drawn as square obstacles.
+- Tar ("8SWA Tar Pits", Un'Goro and Feralas) has the magma sound bank but is drawn dark brown as its own liquid kind.
+- Liquid kinds come from `LiquidType.SoundBank`: 0 water, 1 ocean, 2 magma, 3 slime. Lava and slime are drawn orange and green. Liquids named "slime", "green" or "fel" are drawn as slime even though their sound bank is magma, because Forever's Felwood pools ("1.60.0 FX - Fel - Generic - Bright - Lake") and Green Lava look green in game.
+- Zephras Isle (map 2991) floats in Skywall. Its map has no water data, only a map-wide ocean type and flat filler terrain at about 1.5 yards. On that map the Skywall area (17221), area 0 and the flat filler are drawn as pale sky. UI map 2665 has area 0, so all of its land counts as in zone.
+- Forest is measured as canopy cover, not tree count. Each tree stamps a disc as wide as its model's bounding box (MD20 offset 160), capped at 30 yards, and forest needs 40 % cover over at least 400 cells (about 7000 square yards). Stranglethorn's few giant trees and Durotar's many small palms both come out right, and single trees are dropped.
+- Drop-down edges: dry ground next to a cliff band that sits at least 3 yards above the band's average height marks the cliff's top. That side gets a heavier line.
+- Cave names come from `WMOAreaTable` via the WMO's ID (MOHD offset 32) and the placement's name set (MODF offset 60). Example: model 648 with name set 3 is Burning Blade Coven, with name set 2 it is Skull Rock.
 
 ### Addon (`addons/ClearMap/`, from `templates/ForeverAddonTemplate`)
 
@@ -138,7 +152,8 @@ Facts confirmed in the spike:
 - **Explored overlays.** Required, not optional. Blizzard's base tiles are the unexplored look, and the exploration data provider draws the explored art on top. If only the base tiles are swapped, ClearMap shows only where the player has never been. Hide those overlays while ClearMap is active. How to do it cleanly is open question 8.
 - **Labels and cave pins.** One data provider on `WorldMapFrame`. Names come from `C_Map.GetAreaInfo(areaID)`, so they match the client language.
 - **Toggle.** Button on the map frame, saved in SavedVariables.
-- **Minimap.** Hide Blizzard's terrain with a blank mask texture (`Minimap:SetMaskTexture`), the trick HUD addons use to keep blips. Draw our tiles in a frame below the minimap. Position from `C_Map.GetPlayerMapPosition` and `C_Map.GetWorldPosFromMapPos`, rotation from `GetPlayerFacing` when the rotate-minimap setting is on. Zoom radius per zoom level comes from known tables, checked in game.
+- **Minimap** (`Minimap.lua`). Forever's minimap sets the mask atlas `ui-hud-minimap-frame-generic-mask` and sets it again when the rotation setting changes (`Blizzard_Minimap/Camelot/Minimap.lua`). The addon swaps it for a fully transparent mask (`Media/blank.tga`), which hides Blizzard's terrain. Blips, the player arrow and child frames such as minimap buttons are not affected by the mask. `Minimap:SetAlpha`, which FarmHud uses, was rejected because it also fades child frames. A post-hook on `Minimap:SetMaskTexture` remembers any mask Blizzard or a shape addon sets, re-applies the blank one, and uses the remembered shape for our own terrain frame. That frame sits one level below the minimap and draws the zone tiles of the current zone and its neighbors on the same continent, current zone on top. The player's world position comes from `C_Map.GetPlayerMapPosition` on the best map and the zone's world bounds in `Tiles.lua`. The view size per zoom level is HereBeDragons' outdoor table (466.7, 400, 333.3, 266.7, 200, 133.3 yards). Indoors, in instances, without a position and with a rotating minimap it falls back to Blizzard's terrain.
+- **Neighbor-zone fade.** Tiles are rendered without the fade so the minimap can use them seamlessly across borders. Each map gets a small `fade.tga` (256 x 256) that the world map lays over its tiles.
 
 ### Verified on the `forever` branch (2026-11-06)
 
@@ -175,10 +190,10 @@ Facts confirmed in the spike:
 ## Open questions
 
 1. **Extraction.** Solved: TACTTool reads the `wowf` product (see "Running the pipeline").
-2. **Cities.** Stormwind, Ironforge and Undercity are mostly WMO buildings. Terrain slope says nothing about their floors. Default: keep Blizzard art for them in v1 unless WMO floor rendering turns out cheap.
+2. **Cities.** Decided from renders on 2026-11-06. Stormwind, Orgrimmar, Ironforge and Undercity are each one giant WMO. Drawn as a footprint they cover the whole city, and without them only bare terrain is left. They keep Blizzard's art (`CITY_MAPS` in `export_all.py`), and the minimap falls back there too. Thunder Bluff renders well from terrain, tents and bridges and is included. On zone maps, any building model wider than 250 yards is left out, so Orgrimmar, Ironforge, Undercity and Blackrock Mountain show their terrain instead of a blob.
 3. **Dungeons and raids.** Default: out of v1.
 4. **Slope limit.** The commonly cited walk limit is about 50 degrees. Verify in game.
-5. **Road detection.** Forever's new zones may use new ground textures, so the name patterns need checking per continent.
+5. **Road detection.** Checked on all continents. Road textures match "road", "cobble", "street", "path" or "trail" (Elwynn, Westfall and Duskwood use cobblestone). Eastern Kingdoms roads are painted at about half strength, so the threshold is 0.3 instead of 0.5.
 6. **Resolution and size.** Pick yards per pixel and the file format (TGA or BLP) after the Durotar milestone. Rough guess for the world map: 70 MB as compressed BLP, about 400 MB as TGA.
 7. **Minimap.** Confirm the blank-mask trick and the zoom radius tables on Forever.
 8. **Explored overlays.** Find how Forever draws them and how to hide them cleanly. Blocks the Durotar milestone.

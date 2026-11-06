@@ -6,4 +6,5 @@
 ## SavedVariables: ClearMapDB
 
 Tiles\Tiles.lua
+Minimap.lua
 ClearMap.lua

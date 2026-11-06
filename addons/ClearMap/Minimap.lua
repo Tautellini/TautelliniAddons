@@ -1,0 +1,137 @@
+local _, ns = ...
+
+-- Diameter of the minimap view in yards per outdoor zoom level, as used by HereBeDragons for Mainline clients.
+local VIEW_YARDS = { [0] = 466 + 2 / 3, 400, 333 + 1 / 3, 266 + 2 / 6, 200, 133 + 1 / 3 }
+local BLANK_MASK = "Interface\\AddOns\\ClearMap\\Media\\blank"
+local TILE_PATH = "Interface\\AddOns\\ClearMap\\Tiles\\%d\\%d_%d"
+local SEA = { 0.28, 0.53, 0.67 } -- the deep water color, shown where no map has tiles
+
+-- Forever's own minimap mask. Replaced whenever Blizzard or another addon sets a different one.
+local minimapMask = "ui-hud-minimap-frame-generic-mask"
+local frame, mask, sea
+local textures = {}
+local active, settingMask = false, false
+
+local function SetMask(target, path)
+    if C_Texture.GetAtlasInfo(path) then
+        target:SetAtlas(path)
+    else
+        target:SetTexture(path)
+    end
+end
+
+-- A transparent mask hides Blizzard's terrain but leaves blips, the player arrow and child frames alone.
+local function UseOurTerrain(on)
+    if on == active then return end
+    active = on
+    frame:SetShown(on)
+    settingMask = true
+    Minimap:SetMaskTexture(on and BLANK_MASK or minimapMask)
+    settingMask = false
+end
+
+local function Texture(i)
+    local tex = textures[i]
+    if not tex then
+        tex = frame:CreateTexture(nil, "ARTWORK")
+        tex:AddMaskTexture(mask)
+        textures[i] = tex
+    end
+    return tex
+end
+
+-- Position of the player in world yards (x north, y west), from the zone map position.
+local function PlayerWorldPosition()
+    local mapID = C_Map.GetBestMapForUnit("player")
+    local here = mapID and ns.tiles[mapID]
+    local pos = here and C_Map.GetPlayerMapPosition(mapID, "player")
+    if not pos then return end
+    local px, py = pos:GetXY()
+    if issecretvalue(px) or issecretvalue(py) then return end
+    local b = here.bounds -- min x, min y, max x, max y
+    return mapID, here, b[3] - py * (b[3] - b[1]), b[4] - px * (b[4] - b[2])
+end
+
+local function Update()
+    if not (ns.db.enabled and ns.db.minimap) or IsIndoors() or C_CVar.GetCVarBool("rotateMinimap") then
+        return UseOurTerrain(false)
+    end
+    local mapID, here, wx, wy = PlayerWorldPosition()
+    if not mapID then
+        return UseOurTerrain(false)
+    end
+    local yards = VIEW_YARDS[Minimap:GetZoom()] or VIEW_YARDS[0]
+    local k, half = Minimap:GetWidth() / yards, yards / 2
+    local used = 0
+
+    local function Draw(id, grid, sublevel)
+        local b = grid.bounds
+        local th, tw = (b[3] - b[1]) / grid.rows, (b[4] - b[2]) / grid.cols
+        for row = 0, grid.rows - 1 do
+            local top = b[3] - row * th
+            if top > wx - half and top - th < wx + half then
+                for col = 0, grid.cols - 1 do
+                    local left = b[4] - col * tw
+                    if left > wy - half and left - tw < wy + half then
+                        used = used + 1
+                        local tex = Texture(used)
+                        local path = TILE_PATH:format(id, row, col)
+                        if tex.path ~= path then
+                            tex:SetTexture(path, nil, nil, "TRILINEAR")
+                            tex.path = path
+                        end
+                        tex:SetDrawLayer("ARTWORK", sublevel)
+                        tex:ClearAllPoints()
+                        -- Screen right is east (world y falling), screen up is north (world x rising).
+                        tex:SetPoint("TOPLEFT", frame, "CENTER", (wy - left) * k, (top - wx) * k)
+                        tex:SetSize(tw * k, th * k)
+                        tex:Show()
+                    end
+                end
+            end
+        end
+    end
+
+    -- Neighbor zones fill the view near borders. The current zone is drawn on top of them.
+    for id, grid in pairs(ns.tiles) do
+        if id ~= mapID and grid.map == here.map then
+            Draw(id, grid, 0)
+        end
+    end
+    Draw(mapID, here, 1)
+    for i = used + 1, #textures do
+        textures[i]:Hide()
+    end
+    UseOurTerrain(true)
+end
+
+function ns.SetupMinimap()
+    if not Minimap then return end
+    -- Below the minimap, so its blips and child frames stay on top of our terrain.
+    frame = CreateFrame("Frame", nil, Minimap:GetParent())
+    frame:SetAllPoints(Minimap)
+    frame:SetFrameLevel(math.max(0, Minimap:GetFrameLevel() - 1))
+    frame:Hide()
+    mask = frame:CreateMaskTexture()
+    mask:SetAllPoints(Minimap)
+    SetMask(mask, minimapMask)
+    sea = frame:CreateTexture(nil, "BACKGROUND")
+    sea:SetAllPoints()
+    sea:SetColorTexture(unpack(SEA))
+    sea:AddMaskTexture(mask)
+
+    hooksecurefunc(Minimap, "SetMaskTexture", function(_, path)
+        if settingMask then return end
+        -- Blizzard (rotation change) or a shape addon set a mask. Keep its shape for our terrain.
+        minimapMask = path
+        SetMask(mask, path)
+        if active then
+            settingMask = true
+            Minimap:SetMaskTexture(BLANK_MASK)
+            settingMask = false
+        end
+    end)
+
+    local driver = CreateFrame("Frame")
+    driver:SetScript("OnUpdate", Update)
+end

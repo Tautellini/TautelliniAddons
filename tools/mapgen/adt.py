@@ -64,13 +64,14 @@ def parse_root(data, x, y):
                     holes[r0 + r:r0 + r + 2, c0 + c:c0 + c + 2] = True
 
     liquid = np.full((128, 128), np.nan, np.float32)
+    liquid_type = np.zeros((128, 128), np.uint16)
     mh2o = read_chunks(data).get("MH2O")
     if mh2o:
         for i in range(256):
             ofs_inst, layers, _ = struct.unpack_from("<3I", mh2o, i * 12)
             iy, ix = divmod(i, 16)
             for layer in range(layers):
-                _, _, lo, hi, xo, yo, w, h, ofs_mask, _ = struct.unpack_from("<HHffBBBBII", mh2o, ofs_inst + layer * 24)
+                ltype, _, lo, hi, xo, yo, w, h, ofs_mask, _ = struct.unpack_from("<HHffBBBBII", mh2o, ofs_inst + layer * 24)
                 if ofs_mask:
                     bits = int.from_bytes(mh2o[ofs_mask:ofs_mask + (w * h + 7) // 8], "little")
                 else:
@@ -79,8 +80,10 @@ def parse_root(data, x, y):
                 for k in range(w * h):
                     if bits >> k & 1:
                         r, c = iy * 8 + yo + k // w, ix * 8 + xo + k % w
-                        liquid[r, c] = np.fmax(liquid[r, c], level)
-    return {"heights": heights, "holes": holes, "area": area, "liquid": liquid}
+                        if not level <= liquid[r, c]:  # also true while the cell is still NaN
+                            liquid[r, c] = level
+                            liquid_type[r, c] = ltype
+    return {"heights": heights, "holes": holes, "area": area, "liquid": liquid, "liquid_type": liquid_type}
 
 
 def decode_alpha(mcal, ofs, flags, big_alpha):

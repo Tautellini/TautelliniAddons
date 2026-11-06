@@ -1,10 +1,12 @@
 """Read a WDT terrain index and list the ADT files a UI map needs.
 
-Usage: py -3.13 -I wdt.py <map.wdt> <UiMapAssignment.csv> <uiMapID> <prefix> <out_list.txt>
+Usage: py -3.13 -I wdt.py <map.wdt> <UiMapAssignment.csv> <uiMapID|all> <prefix> <out_list.txt> [skip_dir]
 Writes a TACTTool list file (<fileDataID>;<name> per line) for the root, obj0 and tex0 ADTs.
+"all" lists every tile of the map. Files already present in skip_dir are left out.
 """
 import csv
 import math
+import os
 import struct
 import sys
 
@@ -50,18 +52,19 @@ def region_for(assign_csv, ui_map_id):
     raise SystemExit(f"uiMapID {ui_map_id} not in {assign_csv}")
 
 
-def main(wdt_path, assign_csv, ui_map_id, prefix, out_path):
+def main(wdt_path, assign_csv, ui_map_id, prefix, out_path, skip_dir=None):
     tiles = parse_maid(open(wdt_path, "rb").read())
-    tx, ty = tile_range(*region_for(assign_csv, ui_map_id))
+    tx, ty = (range(64), range(64)) if ui_map_id == "all" else tile_range(*region_for(assign_csv, ui_map_id))
     lines = []
     for (x, y), ids in sorted(tiles.items()):
         if x in tx and y in ty:
-            lines += [f"{ids[k]};{prefix}_{x}_{y}{suffix}.adt" for k, suffix in WANTED.items() if ids[k]]
+            names = {k: f"{prefix}_{x}_{y}{suffix}.adt" for k, suffix in WANTED.items() if ids[k]}
+            lines += [f"{ids[k]};{n}" for k, n in names.items() if not (skip_dir and os.path.exists(os.path.join(skip_dir, n)))]
     open(out_path, "w", encoding="utf-8").write("\n".join(lines) + "\n")
     print(f"{len(lines)} files for tiles x {tx.start}-{tx.stop - 1}, y {ty.start}-{ty.stop - 1} -> {out_path}")
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 6:
+    if len(sys.argv) not in (6, 7):
         raise SystemExit(__doc__)
     main(*sys.argv[1:])

@@ -1,8 +1,10 @@
 """Object placements (obj0 ADTs) and WMO model geometry.
 
-Usage: py -3.13 objects.py <data_dir> <map> roots|groups
+Usage: py -3.13 objects.py <data_dir> <map> roots|groups|m2
   roots:  write <data_dir>/wmo-roots.txt, a TACTTool list of every WMO placed in extract/<map>/*_obj0.adt
   groups: write <data_dir>/wmo-groups.txt, the group files of every root already in extract/wmo/
+  m2:     write <data_dir>/m2.txt, every M2 placed in extract/<map>/*_obj0.adt
+  Files that already exist are left out of every list.
 """
 import glob
 import math
@@ -38,10 +40,11 @@ def parse_obj0(data):
     mo = ch.get("MODF", b"")
     for i in range(len(mo) // 64):
         fid, uid, px, py, pz, rx, ry, rz, *ext = struct.unpack_from("<2I12f", mo, i * 64)
-        flags, _, _, scale = struct.unpack_from("<4H", mo, i * 64 + 56)
+        flags, _, name_set, scale = struct.unpack_from("<4H", mo, i * 64 + 56)
         assert flags & 0x8, "WMO name is not a file ID"
         lo, hi = to_world(*ext[:3]), to_world(*ext[3:])
         wmos.append({"fid": fid, "uid": uid, "pos": to_world(px, py, pz), "rot": (rx, ry, rz), "scale": scale / 1024 if flags & 0x4 else 1.0,
+                     "name_set": name_set,
                      "extents": (min(lo[0], hi[0]), min(lo[1], hi[1]), max(lo[0], hi[0]), max(lo[1], hi[1]))})
     return m2s, wmos
 
@@ -70,7 +73,8 @@ def load_groups(wmo_dir, fid):
     """[(vertices, triangles, flags) or None per group] of a WMO model. Cached per model."""
     if fid not in _groups:
         out = []
-        for i, g in enumerate(parse_wmo_root(open(os.path.join(wmo_dir, f"{fid}.wmo"), "rb").read())):
+        root = os.path.join(wmo_dir, f"{fid}.wmo")
+        for i, g in enumerate(parse_wmo_root(open(root, "rb").read()) if os.path.exists(root) else []):  # not extracted: draw nothing
             path = os.path.join(wmo_dir, f"{fid}_{i:03d}.wmo")
             out.append(parse_wmo_group(open(path, "rb").read()) if g and os.path.exists(path) else None)
         _groups[fid] = out
@@ -89,7 +93,10 @@ def model_entrances(wmo_dir, fid):
 
     A model without such portals (an open den) gets one point at its bounding box center.
     """
-    root = dict(iter_chunks(open(os.path.join(wmo_dir, f"{fid}.wmo"), "rb").read()))
+    path = os.path.join(wmo_dir, f"{fid}.wmo")
+    if not os.path.exists(path):
+        return np.zeros((0, 2), np.float32)
+    root = dict(iter_chunks(open(path, "rb").read()))
     groups = load_groups(wmo_dir, fid)
     flags = [g[2] if g else 0 for g in groups]
     mopt, mopv, mopr = root.get("MOPT", b""), root.get("MOPV", b""), root.get("MOPR", b"")
@@ -120,6 +127,39 @@ def place(xy, wmo):
     return wmo["pos"][0] + x * s, wmo["pos"][1] + y * s
 
 
+_m2 = {}
+
+
+def m2_boxes(m2_dir, fid):
+    """(bounding box, collision box or None) in model space, each (x0, y0, z0, x1, y1, z1). (None, None) if not extracted.
+
+    The MD20 header holds the bounding box at 160, the collision box at 188 and the collision index count at 216.
+    """
+    if fid not in _m2:
+        path = os.path.join(m2_dir, f"{fid}.m2")
+        boxes = (None, None)
+        if os.path.exists(path):
+            data = open(path, "rb").read()
+            md20 = data[8:8 + struct.unpack_from("<I", data, 4)[0]] if data[:4] == b"MD21" else data
+            if md20[:4] == b"MD20" and len(md20) >= 220:
+                collides = struct.unpack_from("<I", md20, 216)[0] > 0
+                boxes = (struct.unpack_from("<6f", md20, 160), struct.unpack_from("<6f", md20, 188) if collides else None)
+        _m2[fid] = boxes
+    return _m2[fid]
+
+
+def m2_collision(m2_dir, fid):
+    return m2_boxes(m2_dir, fid)[1]
+
+
+def wmo_id(wmo_dir, fid):
+    """The model's ID in WMOAreaTable, or None when the model is not extracted."""
+    path = os.path.join(wmo_dir, f"{fid}.wmo")
+    if not os.path.exists(path):
+        return None
+    return struct.unpack_from("<I", dict(iter_chunks(open(os.path.join(wmo_dir, f"{fid}.wmo"), "rb").read()))["MOHD"], 32)[0]
+
+
 def bbox_corners(wmo_dir, fid):
     mohd = dict(iter_chunks(open(os.path.join(wmo_dir, f"{fid}.wmo"), "rb").read()))["MOHD"]
     b = struct.unpack_from("<6f", mohd, 36)
@@ -128,18 +168,23 @@ def bbox_corners(wmo_dir, fid):
 
 def main(data_dir, map_name, step):
     tiles = glob.glob(os.path.join(data_dir, "extract", map_name, f"{map_name}_*_obj0.adt"))
-    roots = sorted({w["fid"] for t in tiles for w in parse_obj0(open(t, "rb").read())[1]})
+    placed = [parse_obj0(open(t, "rb").read()) for t in tiles]
     wmo_dir = os.path.join(data_dir, "extract", "wmo")
+    roots = sorted({w["fid"] for _, ws in placed for w in ws})
     if step == "roots":
         lines = [f"{fid};{fid}.wmo" for fid in roots]
-        out = os.path.join(data_dir, "wmo-roots.txt")
-    else:
+        out_dir, out = wmo_dir, os.path.join(data_dir, "wmo-roots.txt")
+    elif step == "groups":
         lines = []
         for fid in roots:
             path = os.path.join(wmo_dir, f"{fid}.wmo")
             if os.path.exists(path):
                 lines += [f"{g};{fid}_{i:03d}.wmo" for i, g in enumerate(parse_wmo_root(open(path, "rb").read())) if g]
-        out = os.path.join(data_dir, "wmo-groups.txt")
+        out_dir, out = wmo_dir, os.path.join(data_dir, "wmo-groups.txt")
+    else:
+        lines = [f"{fid};{fid}.m2" for fid in sorted({m["fid"] for ms, _ in placed for m in ms})]
+        out_dir, out = os.path.join(data_dir, "extract", "m2"), os.path.join(data_dir, "m2.txt")
+    lines = [l for l in lines if not os.path.exists(os.path.join(out_dir, l.split(";")[1]))]
     open(out, "w", encoding="utf-8").write("\n".join(lines) + "\n")
     print(f"{len(lines)} files -> {out}")
 

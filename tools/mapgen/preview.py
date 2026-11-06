@@ -2,11 +2,13 @@
 
 Usage: py -3.13 preview.py <uiMapID> <data_dir> <out.png> [clay|sand|slate]
 data_dir holds db2/*.csv, listfile/community-listfile.csv, extract/<map>.wdt and extract/<map>/<map>_X_Y*.adt.
-Classes so far: walkable, too steep, water, road, forest, building, bridge, cave outline and entrance, other zone (faded).
+Classes: walkable, too steep with drop-down edges, water, lava, slime, road, forest, building, bridge,
+cave outline and entrance, other zone (faded).
 """
 import csv
 import math
 import os
+import re
 import sys
 
 import numpy as np
@@ -14,7 +16,7 @@ from PIL import Image, ImageDraw
 from scipy import ndimage
 
 from adt import UNIT, parse_root, parse_tex0, tile_origin
-from objects import model_entrances, model_triangles, parse_obj0, place
+from objects import m2_boxes, m2_collision, model_entrances, model_triangles, parse_obj0, place, wmo_id
 from wdt import read_chunks, region_for, tile_range
 
 WALK_LIMIT_DEG = 50  # shortcut: commonly cited limit, verify in game (spec open question 4)
@@ -28,41 +30,95 @@ STYLES = {
         "water": (160, 210, 224), "water_deep": (92, 156, 188), "water_edge": (118, 172, 196),
         "shadow": (80, 60, 40), "outside": (214, 208, 198), "border": (140, 128, 112), "hole": (93, 64, 55),
         "road": (252, 248, 240), "road_edge": (178, 160, 132),
+        "sky": (224, 232, 238), "sky_edge": (176, 190, 200),
         "forest": (190, 196, 150), "building": (220, 206, 186), "building_edge": (150, 132, 108),
         "cave": (110, 96, 80), "cave_edge": (90, 76, 60), "entrance": (93, 64, 55), "entrance_ring": (252, 248, 240),
+        "ledge": (120, 98, 72), "lava": (226, 112, 58), "lava_edge": (168, 64, 32), "slime": (150, 184, 96), "slime_edge": (96, 128, 56),
+        "tar": (72, 62, 54), "tar_edge": (40, 34, 30),
     },
     "clay": {
         "land": (228, 211, 186), "steep": (200, 168, 134), "steep_edge": (150, 112, 80),
         "water": (146, 202, 216), "water_deep": (72, 136, 170), "water_edge": (104, 160, 186),
         "shadow": (90, 50, 30), "outside": (212, 200, 184), "border": (130, 100, 76), "hole": (80, 46, 32),
         "road": (250, 242, 228), "road_edge": (176, 140, 104),
+        "sky": (222, 230, 236), "sky_edge": (168, 150, 130),
         "forest": (176, 182, 128), "building": (208, 186, 162), "building_edge": (136, 100, 72),
         "cave": (110, 76, 52), "cave_edge": (96, 60, 38), "entrance": (80, 46, 32), "entrance_ring": (250, 242, 228),
+        "ledge": (112, 76, 50), "lava": (226, 112, 58), "lava_edge": (160, 62, 30), "slime": (150, 184, 96), "slime_edge": (96, 128, 56),
+        "tar": (70, 56, 46), "tar_edge": (40, 30, 24),
     },
     "slate": {
         "land": (226, 227, 221), "steep": (197, 200, 191), "steep_edge": (146, 152, 144),
         "water": (156, 200, 216), "water_deep": (82, 140, 176), "water_edge": (112, 160, 186),
         "shadow": (40, 50, 60), "outside": (208, 210, 206), "border": (120, 126, 122), "hole": (60, 64, 70),
         "road": (250, 250, 248), "road_edge": (150, 156, 150),
+        "sky": (230, 236, 242), "sky_edge": (170, 180, 190),
         "forest": (180, 196, 172), "building": (206, 208, 204), "building_edge": (130, 136, 132),
         "cave": (90, 96, 100), "cave_edge": (70, 76, 80), "entrance": (60, 64, 70), "entrance_ring": (250, 250, 248),
+        "ledge": (110, 116, 110), "lava": (226, 112, 58), "lava_edge": (160, 62, 30), "slime": (150, 184, 96), "slime_edge": (96, 128, 56),
+        "tar": (66, 66, 70), "tar_edge": (36, 36, 40),
     },
 }
 SHADOW_OFFSET_PX = 3
-ROAD_NAME = "road"  # ground textures whose file name contains this are roads and paths
+ROAD_PATTERN = re.compile(r"road|cobble|street|path|trail")  # ground texture file names that are roads and paths
+ROAD_MIN_WEIGHT = 0.3  # Eastern Kingdoms roads are painted at about half strength, Kalimdor's at full
 MIN_ROAD_PX = 200  # painted road patches smaller than this (about 900 square yards) are decoration, not roads
 ROAD_SPUR_PX = 8  # side branches up to this long (half cells) are thinning artifacts
 ROAD_RADIUS_PX = 2.5  # drawn road half width in output pixels
 ROAD_MIN_EXTENT_PX = 24  # road pieces spanning less than this (about 50 yards) are rings around props, not roads
 DEEP_WATER_CELLS = 40  # distance from shore where water reaches its deepest color (about 170 yards)
 TREE_NAMES = ("tree", "palm")  # M2 file names that count as trees
-FOREST_SIGMA_CELLS = 4
-FOREST_DENSITY = 0.03  # smoothed trees per cell above which an area counts as forest
+FOREST_SIGMA_CELLS = 2
+FOREST_COVER = 0.4  # share of ground under tree canopies above which an area counts as forest
+MIN_FOREST_CELLS = 400  # about 7000 square yards: a grove of several trees, not one big canopy
+CANOPY_DEFAULT_YARDS = 5.0  # canopy radius for a tree whose model is not extracted
+CANOPY_MAX_YARDS = 30.0  # a few tree models have huge bounding boxes; single trees are dropped by MIN_FOREST_CELLS anyway
+# Forever's new models have no listfile name and an empty internal name. A tall model whose
+# collision covers little of its footprint is a trunk under a canopy, so it counts as a tree.
+UNNAMED_TREE_MIN_HEIGHT = 10.0
+UNKNOWN_PATH = "models/unknown/"  # listfile placeholder for files nobody has named yet
+UNNAMED_TREE_MAX_COLLISION_SHARE = 0.35
+# Maps whose space around the land is sky, not sea. Zephras Isle floats in Skywall (area 17221),
+# over flat filler terrain at about 1.5 yards that the player never reaches.
+SKY_MAPS = {2991: {"areas": {17221, 0}, "filler_height": 1.5}}  # area 0: unassigned filler
 CAVE_PATH = "/dungeon/"  # caves, mines and dens live under world/wmo/dungeon/, next to shipwrecks and ruins
 CAVE_WORDS = ("cave", "mine", "den", "tunnel", "barrow", "wailing")
 BRIDGE_NAME = "bridge"
+BUILDING_MAX_YARDS = 250  # models wider than this are whole cities or dungeon complexes; their terrain is shown instead
 DASH_PX = 10  # supersampled length of one dash in cave outlines
 ENTRANCE_RADIUS_PX = 5  # output pixels
+LIQUID_KINDS = {0: "water", 1: "water", 2: "lava", 3: "slime"}  # LiquidType.SoundBank: water, ocean, magma, slime
+LEDGE_RISE = 3.0  # yards the ground next to a cliff must sit above the cliff band to count as its top edge
+OBSTACLE_MIN_SIZE = 4.0  # yards along the longest side of a prop's collision box
+OBSTACLE_MIN_HEIGHT = 2.0  # yards, lower props can be jumped over
+OBSTACLE_THIN_YARDS = 2.0  # fences and walls thinner than this stay crisp lines
+OBSTACLE_ROUNDING_CELLS = 0.4  # blur that rounds the corners of chunky obstacles
+WALKABLE_WORDS = ("bridge", "dock", "pier", "stair", "ramp", "platform", "plank", "boardwalk", "walkway", "floor", "rug")
+OUTSIDE_FADE = 0.6  # opacity of the "outside" color over neighbor zones on the world map
+MIN_LABEL_CELLS = 300  # subzones smaller than this (about 5000 square yards) get no label
+
+
+def wmo_area_names(db2_dir):
+    """{(WMO ID, name set): (area ID, English name)} for whole models (group -1)."""
+    out = {}
+    for r in csv.DictReader(open(os.path.join(db2_dir, "WMOAreaTable.csv"), encoding="utf-8")):
+        if r["WMOGroupID"] == "-1":
+            out[(int(r["WMOID"]), int(r["NameSetID"]))] = (int(r["AreaTableID"]), r["AreaName_lang"])
+    return out
+
+
+def liquid_kinds(db2_dir):
+    """{LiquidType ID: "water" | "lava" | "slime"}."""
+    # Fel and green lava behave like magma but look like slime, so their name decides the color.
+    # Plain "green" is not enough: Forever's swamp water is "PBRWater - Generic - Swamp - Green".
+    def kind(r):
+        if re.search(r"\btar\b", r["Name"], re.I):
+            return "tar"  # "8SWA Tar Pits" has the magma sound bank but is black
+        if re.search(r"slime|green lava|\bfel\b", r["Name"], re.I):
+            return "slime"
+        return LIQUID_KINDS.get(int(r["SoundBank"]), "water")
+    return {int(r["ID"]): kind(r)
+            for r in csv.DictReader(open(os.path.join(db2_dir, "LiquidType.csv"), encoding="utf-8"))}
 
 
 def zone_of(db2_dir):
@@ -81,9 +137,9 @@ def drop_small(mask, min_cells, diagonal=False):
     return mask & np.isin(labels, 1 + np.flatnonzero(sizes >= min_cells))
 
 
-def smooth(mask, sigma_cells, scale=SS):
+def smooth(mask, sigma_cells, scale=None):
     """Mask to a supersampled mask with rounded, smooth edges (blur, then threshold). scale = supersampled px per mask px."""
-    f = ndimage.zoom(mask.astype(np.float32), scale, order=1, grid_mode=True, mode="nearest")
+    f = ndimage.zoom(mask.astype(np.float32), scale or SS, order=1, grid_mode=True, mode="nearest")  # SS read now, export sets it per map
     return ndimage.gaussian_filter(f, sigma_cells * SS) > 0.5
 
 
@@ -147,11 +203,23 @@ def scan_listfile(listfile, fids):
     road_ids, names = set(), {}
     for line in open(listfile, encoding="utf-8"):
         fid, name = line.rstrip("\n").split(";", 1)
-        if name.startswith("tileset/") and ROAD_NAME in name.rsplit("/", 1)[-1]:
+        if name.startswith("tileset/") and ROAD_PATTERN.search(name.rsplit("/", 1)[-1]):
             road_ids.add(int(fid))
         elif int(fid) in fids:
             names[int(fid)] = name
     return road_ids, names
+
+
+def is_tree(name, boxes):
+    """True for tree models: by file name, or by shape when the model has no known name."""
+    if name and not name.startswith(UNKNOWN_PATH):
+        return any(t in name.rsplit("/", 1)[-1] for t in TREE_NAMES)
+    bbox, collision = boxes
+    if not bbox or bbox[5] - bbox[2] < UNNAMED_TREE_MIN_HEIGHT:
+        return False
+    footprint = (bbox[3] - bbox[0]) * (bbox[4] - bbox[1])
+    covered = (collision[3] - collision[0]) * (collision[4] - collision[1]) if collision else 0.0
+    return footprint > 0 and covered / footprint < UNNAMED_TREE_MAX_COLLISION_SHARE
 
 
 def rasterize(tris, shape):
@@ -191,8 +259,10 @@ def build(ui_map_id, data_dir):
     rows, cols = len(ty) * 128, len(tx) * 128
     heights = np.zeros((rows + 1, cols + 1), np.float32)
     liquid = np.full((rows, cols), np.nan, np.float32)
+    liquid_type = np.zeros((rows, cols), np.uint16)
     have = np.zeros((rows, cols), bool)
     zone = np.zeros((rows, cols), np.int32)
+    area = np.zeros((rows, cols), np.int32)
     road = np.zeros((rows * 2, cols * 2), np.float32)  # half-cell resolution
     top = zone_of(db2_dir)
 
@@ -205,7 +275,9 @@ def build(ui_map_id, data_dir):
             r, c = j * 128, i * 128
             heights[r:r + 129, c:c + 129] = t["heights"]
             liquid[r:r + 128, c:c + 128] = t["liquid"]
+            liquid_type[r:r + 128, c:c + 128] = t["liquid_type"]
             have[r:r + 128, c:c + 128] = True
+            area[r:r + 128, c:c + 128] = np.kron(t["area"], np.ones((8, 8), np.int32))
             zone[r:r + 128, c:c + 128] = np.kron(np.vectorize(top)(t["area"]), np.ones((8, 8), np.int32))
             tex0 = path[:-4] + "_tex0.adt"
             if os.path.exists(tex0):
@@ -219,17 +291,32 @@ def build(ui_map_id, data_dir):
     steep = drop_small(steep, MIN_STEEP_CELLS)
     steep |= ~drop_small(~steep, MIN_STEEP_CELLS)  # tiny flat spots inside cliffs are noise too
     ground = (h00 + h01 + h10 + h11) / 4
-    water = ~have | (np.isfinite(liquid) & (liquid > ground + WATER_MIN_DEPTH))
-    in_zone = have & (zone == zone_area)
+    wet = np.isfinite(liquid) & (liquid > ground + WATER_MIN_DEPTH)
+    kind_of = liquid_kinds(db2_dir)
+    kinds = np.vectorize(lambda t: kind_of.get(int(t), "water"), otypes=[object])(liquid_type)
+    lava, slime, tar = wet & (kinds == "lava"), wet & (kinds == "slime"), wet & (kinds == "tar")
+    sky = np.zeros_like(wet)
+    rule = SKY_MAPS.get(int(map_id))
+    if rule:
+        flat = np.maximum.reduce([h00, h01, h10, h11]) - np.minimum.reduce([h00, h01, h10, h11]) < 0.5
+        sky = ~have | (~wet & (np.isin(area, list(rule["areas"])) | (flat & (np.abs(ground - rule["filler_height"]) < 1.5))))
+        steep &= ~sky
+    water = (~have | (wet & ~lava & ~slime & ~tar)) & ~sky
+    # Drop-down edges: dry ground next to a cliff band that sits clearly above the band's average height.
+    near = ndimage.uniform_filter(steep.astype(np.float32), 5)
+    band_height = ndimage.uniform_filter(np.where(steep, ground, 0), 5) / np.maximum(near, 1e-6)
+    ledge = ~steep & (near > 0) & (ground > band_height + LEDGE_RISE)
+    in_zone = have & ((zone == zone_area) if zone_area else (zone != 0))  # a map without an area covers everything
 
     # Crop to the map region plus a margin, in cells.
     ox, oy = tile_origin(tx.start, ty.start)
     r0, r1 = math.floor((ox - max_x) / UNIT), math.ceil((ox - min_x) / UNIT)
     c0, c1 = math.floor((oy - max_y) / UNIT), math.ceil((oy - min_y) / UNIT)
     pad = lambda a, v: np.pad(a, MARGIN, constant_values=v)[r0:r1 + 2 * MARGIN, c0:c1 + 2 * MARGIN]
-    steep, water, in_zone = pad(steep, False), pad(water, True), pad(in_zone, False)
-    road = ndimage.gaussian_filter(np.pad(road, 2 * MARGIN)[2 * r0:2 * (r1 + 2 * MARGIN), 2 * c0:2 * (c1 + 2 * MARGIN)], 1.0) > 0.5
-    road = drop_small(road & ~np.kron(water, np.ones((2, 2), bool)), MIN_ROAD_PX)
+    steep, water, in_zone, area = pad(steep, False), pad(water, True), pad(in_zone, False), pad(area, 0)
+    lava, slime, tar, ledge, sky = pad(lava, False), pad(slime, False), pad(tar, False), pad(ledge, False), pad(sky, False)
+    road = ndimage.gaussian_filter(np.pad(road, 2 * MARGIN)[2 * r0:2 * (r1 + 2 * MARGIN), 2 * c0:2 * (c1 + 2 * MARGIN)], 1.0) > ROAD_MIN_WEIGHT
+    road = drop_small(road & ~np.kron(water | sky, np.ones((2, 2), bool)), MIN_ROAD_PX)
     road = drop_short(prune(thin(road), ROAD_SPUR_PX), ROAD_MIN_EXTENT_PX)  # center lines
 
     # World X, Y to supersampled (row, col) of the cropped image.
@@ -239,34 +326,95 @@ def build(ui_map_id, data_dir):
 
     wmo_dir = os.path.join(data_dir, "extract", "wmo")
     kinds = {"building": [], "bridge": [], "cave": []}
-    entrances = []
+    entrances, caves = [], []
+    wmo_names = wmo_area_names(db2_dir)
     for w in wmos.values():
         name = names.get(w["fid"], "")
         if CAVE_PATH in name and any(k in name for k in CAVE_WORDS):
             kinds["cave"].append(to_px(*place(model_triangles(wmo_dir, w["fid"], interior_only=True), w)))
-            entrances += list(to_px(*place(model_entrances(wmo_dir, w["fid"]), w)))
+            doors = to_px(*place(model_entrances(wmo_dir, w["fid"]), w))
+            entrances += list(doors)
+            cave_area, cave_name = wmo_names.get((wmo_id(wmo_dir, w["fid"]), w["name_set"]), (0, ""))
+            for r, c in doors:
+                cell = (min(max(int(r / SS), 0), area.shape[0] - 1), min(max(int(c / SS), 0), area.shape[1] - 1))
+                # Unnamed caves fall back to the terrain area at their door.
+                if in_zone[cell]:  # caves of neighbor zones belong on their own map
+                    caves.append({"r": r, "c": c, "area": cave_area or (0 if cave_name else int(area[cell])), "name": cave_name})
         else:
             kind = "bridge" if BRIDGE_NAME in name.rsplit("/", 1)[-1] else "building"
-            kinds[kind].append(to_px(*place(model_triangles(wmo_dir, w["fid"]), w)))
+            wx, wy = place(model_triangles(wmo_dir, w["fid"]), w)
+            if wx.size and max(np.ptp(wx), np.ptp(wy)) > BUILDING_MAX_YARDS:
+                continue
+            kinds[kind].append(to_px(wx, wy))
     geo = {k: rasterize(np.concatenate(v), shape_hi) if v else np.zeros(shape_hi, bool) for k, v in kinds.items()}
 
-    forest = np.zeros(steep.shape, np.float32)
+    # Forest: ground covered by tree canopies. Each tree stamps a disc as wide as its model, so a few
+    # giant jungle trees count as much as many small palms.
+    m2_dir = os.path.join(data_dir, "extract", "m2")
+    canopy = Image.new("L", (steep.shape[1], steep.shape[0]))
+    draw = ImageDraw.Draw(canopy)
+    trees = {fid for fid in {o["fid"] for o in m2s.values()} if is_tree(names.get(fid, ""), m2_boxes(m2_dir, fid))}
     for o in m2s.values():
-        if any(t in names.get(o["fid"], "").rsplit("/", 1)[-1] for t in TREE_NAMES):
-            r, c = (to_px(*o["pos"][:2]) / SS).astype(int)
-            if 0 <= r < forest.shape[0] and 0 <= c < forest.shape[1]:
-                forest[r, c] += 1
-    forest = (ndimage.gaussian_filter(forest, FOREST_SIGMA_CELLS) > FOREST_DENSITY) & ~water
+        if o["fid"] in trees:
+            box = m2_boxes(m2_dir, o["fid"])[0]
+            radius = (max(abs(v) for v in (box[0], box[1], box[3], box[4])) if box else CANOPY_DEFAULT_YARDS) * o["scale"]
+            radius = min(radius, CANOPY_MAX_YARDS)
+            r, c = to_px(*o["pos"][:2]) / SS
+            k = radius / UNIT
+            draw.ellipse((c - k, r - k, c + k, r + k), fill=255)
+    cover = ndimage.gaussian_filter(np.asarray(canopy, np.float32) / 255, FOREST_SIGMA_CELLS)
+    forest = drop_small((cover > FOREST_COVER) & ~water & ~sky, MIN_FOREST_CELLS)
+
+    # Large obstacles: the collision box of every prop big enough to block a player.
+    quads = {"thin": [], "chunky": []}
+    for o in m2s.values():
+        file_name = names.get(o["fid"], "").rsplit("/", 1)[-1]
+        box = m2_collision(m2_dir, o["fid"])
+        if not box or o["fid"] in trees or any(w in file_name for w in WALKABLE_WORDS):
+            continue
+        s = o["scale"]
+        if (box[5] - box[2]) * s < OBSTACLE_MIN_HEIGHT or max(box[3] - box[0], box[4] - box[1]) * s < OBSTACLE_MIN_SIZE:
+            continue
+        corners = np.array([(box[0], box[1]), (box[3], box[1]), (box[3], box[4]), (box[0], box[4])], np.float32)
+        slim = min(box[3] - box[0], box[4] - box[1]) * s < OBSTACLE_THIN_YARDS
+        quads["thin" if slim else "chunky"].append(to_px(*place(corners, o)))
+    obstacle = np.zeros(shape_hi, bool)
+    for kind, qs in quads.items():
+        if qs:
+            q = np.stack(qs)
+            mask = rasterize(np.concatenate([q[:, [0, 1, 2]], q[:, [0, 2, 3]]]), shape_hi)
+            if kind == "chunky":  # rocks, mounds and crystals read better rounded than as boxes
+                mask = ndimage.gaussian_filter(mask.astype(np.float32), SS * OBSTACLE_ROUNDING_CELLS) > 0.5
+            obstacle |= mask
 
     # Exact map region inside the rendered image, in output pixels (the image starts at cell r0, c0).
     px = SS / 2
     box = (((oy - max_y) / UNIT - c0) * px, ((ox - max_x) / UNIT - r0) * px, ((oy - min_y) / UNIT - c0) * px, ((ox - min_x) / UNIT - r0) * px)
 
-    return {"steep": steep & ~water, "water": water, "in_zone": in_zone, "road": road, "forest": forest,
-            "entrances": entrances, "box": box, **geo}
+    # Label anchors: the point deepest inside each subzone's largest piece of dry land.
+    labels = []
+    cave_areas = {c["area"] for c in caves}
+    for a in np.unique(area[in_zone]):
+        if a in (0, zone_area) or a in cave_areas:
+            continue
+        pieces, n = ndimage.label((area == a) & in_zone & ~water)
+        if not n:
+            continue
+        sizes = ndimage.sum(pieces > 0, pieces, range(1, n + 1))
+        if sizes.max() < MIN_LABEL_CELLS:
+            continue
+        depth = ndimage.distance_transform_edt(pieces == 1 + sizes.argmax())
+        r, c = np.unravel_index(depth.argmax(), depth.shape)
+        labels.append({"r": (r + 0.5) * SS, "c": (c + 0.5) * SS, "area": int(a)})
+
+    return {"steep": steep & ~water & ~lava & ~slime & ~tar, "water": water, "lava": lava, "slime": slime, "tar": tar,
+            "ledge": ledge, "sky": sky,
+            "in_zone": in_zone, "road": road, "forest": forest, "obstacle": obstacle, "entrances": entrances, "caves": caves, "labels": labels,
+            "box": box, "map_id": int(map_id), **geo}
 
 
-def render(masks, style):
+def render(masks, style, markers=True, fade=True):
+    """Styled RGB image. fade=False leaves other zones unfaded, for tiles shared by the world map and the minimap."""
     s = STYLES[style]
     steep_hi, water_hi, zone_hi = smooth(masks["steep"], 0.8), smooth(masks["water"], 0.8), smooth(masks["in_zone"], 3.0)
     depth = np.clip(ndimage.distance_transform_edt(masks["water"]) / DEEP_WATER_CELLS, 0, 1)
@@ -281,18 +429,31 @@ def render(masks, style):
     paint(img, shadow * ~steep_hi, s["shadow"], 0.3)
     paint(img, steep_hi, s["steep"])
     paint(img, edge(steep_hi, 1.0) & ~water_hi, s["steep_edge"])
+    # Heavier line on the high side of cliffs: you can jump down there but not climb up.
+    paint(img, edge(steep_hi, 1.75) & smooth(ndimage.binary_dilation(masks["ledge"]), 0.5) & ~water_hi, s["ledge"])
+    for liquid in ("lava", "slime", "tar"):
+        liquid_hi = smooth(masks[liquid], 0.8)
+        paint(img, liquid_hi, s[liquid])
+        paint(img, edge(liquid_hi, 1.0), s[liquid + "_edge"])
     r = ROAD_RADIUS_PX * 2
     disk = np.hypot(*np.mgrid[-r:r + 1, -r:r + 1]) <= r
     road_hi = ndimage.binary_dilation(np.kron(masks["road"], np.ones((SS // 2, SS // 2), bool)), disk)
     paint(img, edge(road_hi, 0.75) & ~water_hi, s["road_edge"])
     paint(img, road_hi, s["road"])
+    obstacle = masks["obstacle"] & ~water_hi
+    paint(img, obstacle, s["steep"])
+    paint(img, edge(obstacle, 0.6) & ~water_hi, s["steep_edge"])
     building = masks["building"]
     b_shadow = ndimage.gaussian_filter(np.pad(building, ((4, 0), (4, 0)))[:-4, :-4].astype(np.float32), 3)
     paint(img, b_shadow * ~building, s["shadow"], 0.35)
     paint(img, building, s["building"])
     paint(img, edge(building, 0.6), s["building_edge"])
-    paint(img, ~zone_hi & ~water_hi, s["outside"], 0.6)
+    if fade:
+        paint(img, ~zone_hi & ~water_hi, s["outside"], OUTSIDE_FADE)
     paint(img, water_hi, water_color)
+    sky_hi = smooth(masks["sky"], 1.5)
+    paint(img, sky_hi, s["sky"])
+    paint(img, edge(sky_hi, 1.0) & ~water_hi, s["sky_edge"])
     paint(img, edge(water_hi, 1.0), s["water_edge"])
     bridge = masks["bridge"]
     paint(img, edge(bridge, 0.75), s["road_edge"])
@@ -304,7 +465,7 @@ def render(masks, style):
     paint(img, edge(cave, 0.75) & ((rows + cols) // DASH_PX % 2 == 0), s["cave_edge"])
     marks = Image.new("L", (img.shape[1] * 2, img.shape[0] * 2))
     ring, dot = ENTRANCE_RADIUS_PX * 2, (ENTRANCE_RADIUS_PX - 1.5) * 2
-    for r, c in masks["entrances"]:
+    for r, c in masks["entrances"] if markers else []:
         ImageDraw.Draw(marks).ellipse((c - ring, r - ring, c + ring, r + ring), fill=1)
         ImageDraw.Draw(marks).ellipse((c - dot, r - dot, c + dot, r + dot), fill=2)
     marks = np.array(marks)
@@ -312,6 +473,17 @@ def render(masks, style):
     paint(img, marks == 2, s["entrance"])
     m = MARGIN * SS // 2
     return Image.fromarray(img[m:-m, m:-m].round().astype(np.uint8))
+
+
+def fade_overlay(masks, style):
+    """RGBA image of the neighbor-zone fade alone, for the world map to lay over unfaded tiles."""
+    zone_hi, water_hi = smooth(masks["in_zone"], 3.0), smooth(masks["water"], 0.8)
+    alpha = coverage(~zone_hi & ~water_hi) * OUTSIDE_FADE
+    m = MARGIN * SS // 2
+    rgba = np.empty(alpha.shape + (4,), np.uint8)
+    rgba[..., :3] = STYLES[style]["outside"]
+    rgba[..., 3] = (alpha * 255).round()
+    return Image.fromarray(rgba[m:-m, m:-m], "RGBA")
 
 
 def main(ui_map_id, data_dir, out_png, style="clay"):
