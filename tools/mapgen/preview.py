@@ -27,7 +27,8 @@ MARGIN = 8  # cells kept around the map region so blurring has data at the edges
 LINE_SCALE = 1.0  # line widths are tuned for a 2560-pixel render. export.py scales them to the actual render width.
 STYLES = {
     "sand": {
-        "land": (233, 224, 207), "steep": (212, 196, 172), "steep_edge": (168, 148, 118),
+        "land": (233, 224, 207), "steep": (212, 196, 172), "steep_edge": (168, 148, 118), "barrier": (190, 172, 146),
+        "height": ((230, 216, 184), (226, 206, 164), (218, 194, 146)),
         "water": (160, 210, 224), "water_deep": (92, 156, 188), "water_edge": (118, 172, 196),
         "shadow": (80, 60, 40), "outside": (214, 208, 198), "border": (140, 128, 112), "hole": (93, 64, 55),
         "road": (252, 248, 240), "road_edge": (178, 160, 132),
@@ -38,7 +39,8 @@ STYLES = {
         "tar": (72, 62, 54), "tar_edge": (40, 34, 30), "city": (204, 140, 116), "city_edge": (146, 86, 64),
     },
     "clay": {
-        "land": (228, 211, 186), "steep": (200, 168, 134), "steep_edge": (150, 112, 80),
+        "land": (228, 211, 186), "steep": (200, 168, 134), "steep_edge": (150, 112, 80), "barrier": (172, 136, 104),
+        "height": ((227, 206, 170), (222, 194, 150), (214, 180, 130)),
         "water": (146, 202, 216), "water_deep": (72, 136, 170), "water_edge": (104, 160, 186),
         "shadow": (90, 50, 30), "outside": (212, 200, 184), "border": (130, 100, 76), "hole": (80, 46, 32),
         "road": (250, 242, 228), "road_edge": (176, 140, 104),
@@ -49,7 +51,8 @@ STYLES = {
         "tar": (70, 56, 46), "tar_edge": (40, 30, 24), "city": (198, 120, 92), "city_edge": (132, 62, 40),
     },
     "slate": {
-        "land": (226, 227, 221), "steep": (197, 200, 191), "steep_edge": (146, 152, 144),
+        "land": (226, 227, 221), "steep": (197, 200, 191), "steep_edge": (146, 152, 144), "barrier": (170, 175, 166),
+        "height": ((218, 220, 202), (210, 212, 184), (200, 202, 166)),
         "water": (156, 200, 216), "water_deep": (82, 140, 176), "water_edge": (112, 160, 186),
         "shadow": (40, 50, 60), "outside": (208, 210, 206), "border": (120, 126, 122), "hole": (60, 64, 70),
         "road": (250, 250, 248), "road_edge": (150, 156, 150),
@@ -95,6 +98,12 @@ OBSTACLE_MIN_HEIGHT = 2.0  # yards, lower props can be jumped over
 OBSTACLE_THIN_YARDS = 2.0  # fences and walls thinner than this stay crisp lines
 OBSTACLE_ROUNDING_CELLS = 0.4  # blur that rounds the corners of chunky obstacles
 WALKABLE_WORDS = ("bridge", "dock", "pier", "stair", "ramp", "platform", "plank", "boardwalk", "walkway", "floor", "rug")
+HEIGHT_BANDS = (45, 85, 130)  # yards above the local basin floor where each band starts
+FLOOR_CHUNK_CELLS = 8  # one terrain chunk, about 33 yards
+FLOOR_WINDOW_CHUNKS = 25  # about 830 yards: wider than a mountain range, so its top is not mistaken for a floor
+FLOOR_PERCENTILE = 20  # low but not the minimum, so one ravine does not lift everything around it
+BARRIER_MIN_CELLS = 10000  # blocked mass at least this big (about 170000 square yards) is a mountain range, not a hill
+POCKET_WINDOW_CELLS = 29  # how far around a cut-off pocket (about 60 yards each way) to look for the ground it is compared with
 OUTSIDE_FADE = 0.6  # opacity of the "outside" color over neighbor zones on the world map
 CAPITAL_UIMAPS = (1453, 1454, 1455, 1456, 1457, 1458)  # Stormwind, Orgrimmar, Ironforge, Thunder Bluff, Darnassus, Undercity
 CITY_FILL = 0.55  # opacity of the capital highlight on zone maps
@@ -239,6 +248,54 @@ def rasterize(tris, shape):
     return np.array(img, bool)
 
 
+def barrier_mask(m):
+    """Mountain ranges: steep ground plus the dry shelves on them that no player can walk to."""
+    rows, cols = m["steep"].shape
+    from_hi = lambda hi: hi.reshape(rows, SS, cols, SS).any(axis=(1, 3))
+    structures = from_hi(m["bridge"]) | from_hi(m["building"])
+    swim = m["water"] | m["slime"]
+    # The drawn steep mask closes small gaps, which seals real passes, so reachability uses the raw slope.
+    passable = (~m["raw_steep"] | swim | structures) & ~m["sky"]  # on a floating island the sky would be the largest "ground"
+    eight = np.ones((3, 3))
+    labels, n = ndimage.label(passable, eight)
+    sizes = ndimage.sum(passable, labels, range(1, n + 1))
+    # A road, building or cave in a cut-off pocket means a way in the terrain does not show (Razorfen Downs).
+    used = structures | m["road"].reshape(rows, 2, cols, 2).any(axis=(1, 3))
+    for r, c in m["entrances"]:
+        used[min(max(int(r / SS), 0), rows - 1), min(max(int(c / SS), 0), cols - 1)] = True
+    # Players can always drop down, so a pocket only counts as cut off if it sits above the ground around it.
+    main = labels == 1 + sizes.argmax()
+    dry_main = (main & ~m["raw_steep"] & ~swim).astype(np.float32)
+    share = ndimage.uniform_filter(dry_main, POCKET_WINDOW_CELLS)
+    around = ndimage.uniform_filter(dry_main * m["ground"], POCKET_WINDOW_CELLS) / np.maximum(share, 1e-6)
+    ids = np.arange(1, n + 1)
+    with np.errstate(invalid="ignore"):
+        rise = ndimage.mean(m["ground"] - around, np.where(share > 0, labels, 0), ids)  # NaN for a pocket with no main ground nearby
+    keep = np.union1d(np.union1d([1 + sizes.argmax()], labels[used & passable]), ids[rise <= LEDGE_RISE])
+    blocked = (m["steep"] | ~np.isin(labels, keep)) & ~swim & ~m["lava"] & ~m["tar"] & ~m["sky"]
+    labels, n = ndimage.label(blocked, eight)
+    sizes = ndimage.sum(blocked, labels, range(1, n + 1))
+    # Masses crossing the zone border count at any size, so both maps of a border knob agree.
+    crossing = np.intersect1d(labels[blocked & m["in_zone"]], labels[blocked & ~m["in_zone"]])
+    return np.isin(labels, np.union1d(1 + np.flatnonzero(sizes >= BARRIER_MIN_CELLS), crossing))
+
+
+def height_above_floor(m):
+    """Yards each cell sits above the basin floor around it, measured from walkable ground only."""
+    walk = (~m["steep"] & ~m["barrier"] & ~m["water"] & ~m["lava"] & ~m["slime"] & ~m["tar"] & ~m["sky"]).astype(np.float32)
+    b = FLOOR_CHUNK_CELLS
+    share = ndimage.uniform_filter(walk, b)
+    mean = ndimage.uniform_filter(walk * m["ground"], b) / np.maximum(share, 1e-6)
+    share, mean = share[b // 2::b, b // 2::b], mean[b // 2::b, b // 2::b]
+    # Chunks without walkable ground take their nearest neighbor's height, so sea beds and cliffs do not count.
+    nearest = ndimage.distance_transform_edt(share < 0.25, return_distances=False, return_indices=True)
+    floor = ndimage.percentile_filter(mean[tuple(nearest)], FLOOR_PERCENTILE, size=FLOOR_WINDOW_CHUNKS, mode="nearest")
+    floor = ndimage.gaussian_filter(floor, 4, mode="nearest")
+    rows, cols = m["ground"].shape
+    floor = ndimage.zoom(floor, (rows / floor.shape[0], cols / floor.shape[1]), order=1, grid_mode=True, mode="nearest")
+    return ndimage.gaussian_filter(m["ground"] - floor, 1.5)  # bands follow the land, not single terrain cells
+
+
 def build(ui_map_id, data_dir):
     db2_dir = os.path.join(data_dir, "db2")
     assign_csv = os.path.join(db2_dir, "UiMapAssignment.csv")
@@ -291,8 +348,8 @@ def build(ui_map_id, data_dir):
     h00, h01, h10, h11 = heights[:-1, :-1], heights[:-1, 1:], heights[1:, :-1], heights[1:, 1:]
     gx = ((h01 - h00) + (h11 - h10)) / (2 * UNIT)
     gy = ((h10 - h00) + (h11 - h01)) / (2 * UNIT)
-    steep = np.degrees(np.arctan(np.hypot(gx, gy))) > WALK_LIMIT_DEG
-    steep = ndimage.binary_closing(steep, np.ones((3, 3)))  # merge broken cliff rims into one band
+    raw_steep = np.degrees(np.arctan(np.hypot(gx, gy))) > WALK_LIMIT_DEG
+    steep = ndimage.binary_closing(raw_steep, np.ones((3, 3)))  # merge broken cliff rims into one band
     steep = drop_small(steep, MIN_STEEP_CELLS)
     steep |= ~drop_small(~steep, MIN_STEEP_CELLS)  # tiny flat spots inside cliffs are noise too
     ground = (h00 + h01 + h10 + h11) / 4
@@ -445,27 +502,45 @@ def build(ui_map_id, data_dir):
         r, c = np.unravel_index(depth.argmax(), depth.shape)
         cities.append({"r": (r + 0.5) * SS, "c": (c + 0.5) * SS, "area": int(a)})
 
-    return {"city": city, "cities": cities, "steep": steep & ~water & ~lava & ~slime & ~tar, "water": water, "lava": lava, "slime": slime, "tar": tar,
-            "ledge": ledge, "sky": sky,
-            "in_zone": in_zone, "road": road, "forest": forest, "obstacle": obstacle, "entrances": entrances, "caves": caves, "labels": labels,
-            "box": box, "map_id": int(map_id), **geo}
+    out = {"city": city, "cities": cities, "steep": steep & ~water & ~lava & ~slime & ~tar, "water": water, "lava": lava, "slime": slime, "tar": tar,
+           "ledge": ledge, "sky": sky,
+           "in_zone": in_zone, "road": road, "forest": forest, "obstacle": obstacle, "entrances": entrances, "caves": caves, "labels": labels,
+           "box": box, "map_id": int(map_id), "raw_steep": pad(raw_steep, False), "ground": pad(ground, 0.0), **geo}
+    out["barrier"] = barrier_mask(out)
+    out["relief"] = height_above_floor(out)
+    return out
 
 
 def render(masks, style, markers=True, fade=True):
     """Styled RGB image. fade=False leaves other zones unfaded, for tiles shared by the world map and the minimap."""
     s = STYLES[style]
+    saturate = lambda v: tuple(np.clip(np.mean(v) + (np.array(v) - np.mean(v)) * 1.12, 0, 255))  # toon look, same hues
+    s = {k: [saturate(c) for c in v] if k == "height" else saturate(v) for k, v in s.items()}
     steep_hi, water_hi, zone_hi = smooth(masks["steep"], 0.8), smooth(masks["water"], 0.8), smooth(masks["in_zone"], 3.0)
+    barrier_hi = smooth(masks["barrier"], 0.8)
+    steep_hi |= barrier_hi  # the shared outline passes then skip the shelves inside a range
     depth = np.clip(ndimage.distance_transform_edt(masks["water"]) / DEEP_WATER_CELLS, 0, 1)
     depth = ndimage.zoom(depth.astype(np.float32), SS // 2, order=1, grid_mode=True, mode="nearest")[..., None]
+    depth = np.minimum(np.floor(depth * 3) / 2, 1)  # three flat bands instead of a gradient
     water_color = np.array(s["water"], np.float32) * (1 - depth) + np.array(s["water_deep"], np.float32) * depth
     k = max(1, round(SHADOW_OFFSET_PX * 2 * LINE_SCALE))
-    shadow = ndimage.gaussian_filter(np.pad(steep_hi, ((k, 0), (k, 0)))[:-k, :-k].astype(np.float32), k)  # soft, offset down-right
+    shadow = ndimage.gaussian_filter(np.pad(steep_hi, ((k, 0), (k, 0)))[:-k, :-k].astype(np.float32), k / 4)  # hard, offset down-right
 
     img = np.empty((steep_hi.shape[0] // 2, steep_hi.shape[1] // 2, 3), np.float32)
     img[:] = s["land"]
+    relief = ndimage.zoom(masks["relief"], SS, order=1, grid_mode=True, mode="nearest")
+    for limit, color in zip(HEIGHT_BANDS, s["height"]):
+        band = relief > limit
+        paint(img, band, color)
+        paint(img, edge(band, 0.4), s["steep_edge"], 0.45)
     paint(img, smooth(masks["forest"], 1.5), s["forest"], 0.6)
     paint(img, shadow * ~steep_hi, s["shadow"], 0.3)
     paint(img, steep_hi, s["steep"])
+    paint(img, barrier_hi, s["barrier"])
+    # Cel rims: lit on faces toward the top left light, shaded on the far side.
+    r = max(1, round(4 * 2 * LINE_SCALE))
+    paint(img, barrier_hi & ~np.pad(barrier_hi, ((r, 0), (r, 0)))[:-r, :-r], (255, 244, 224), 0.22)
+    paint(img, barrier_hi & ~np.pad(barrier_hi, ((0, r), (0, r)))[r:, r:], s["shadow"], 0.22)
     paint(img, edge(steep_hi, 1.0) & ~water_hi, s["steep_edge"])
     # Heavier line on the high side of cliffs: you can jump down there but not climb up.
     paint(img, edge(steep_hi, 1.75) & smooth(ndimage.binary_dilation(masks["ledge"]), 0.5) & ~water_hi, s["ledge"])

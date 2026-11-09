@@ -1,5 +1,13 @@
 # ClearMap changelog
 
+## 1.1.0
+
+New look for all zone maps.
+
+- Mountain ranges are drawn as one solid barrier, so the natural borders of a zone stand out from small hills
+- Walkable ground high up on a mountain has its own gold shades, in three steps by height, so it no longer looks like the valley floor
+- A slightly more stylized style to fit the game: water in flat bands, harder shadows, shaded mountain edges and a little more color
+
 ## 1.0.0
 
 First release.

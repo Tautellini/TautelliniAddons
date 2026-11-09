@@ -1,5 +1,7 @@
 # ClearMap
 
+Status (2026-11-09): all zone maps were re-exported with mountain barriers, the toon look and height bands (see Decisions) and reviewed from QA sheets in `C:\dev\mapgen-data\qa-toon`. Released as 1.1.0 (`.release/ClearMap-1.1.0.zip`, tag `ClearMap-1.1.0`), following 1.0.0 on CurseForge. No in-game test of this look is recorded yet.
+
 Status (2026-11-06): 1.0.0 prepared for CurseForge: `assets/ClearMap/` holds the logo, description (`curseforge.md`) and changelog, and `.release/ClearMap-1.0.0.zip` (65.2 MB, built from the addon folder because the tiles are gitignored) is the upload. All 51 zone maps are exported, every layer from the spec is in, and each map was reviewed from its stitched QA image. Since 2026-11-06 the four model-built capitals (Stormwind, Orgrimmar, Ironforge, Undercity) are drawn from their models' floors too (open question 2), not yet tested in game. Tested in game: the first build with Durotar (tile swap, explored overlays hidden, toggle button, `/clearmap`), then cave pins and area labels, which the user asked to make smaller and off by default. Not yet tested in game: the settings panel, the minimap, the neighbor-zone fade overlay and every map other than Durotar. Target client: WoW Forever (Interface 16001). "ClearMap" is a working name.
 
 ## Goal
@@ -17,7 +19,9 @@ From the planning session on 2026-11-06.
 | Distribution | Personal use first. Public release decided later. |
 | Look | Google Maps light, Material palette. Full color, not monochrome. The user picked the "clay" palette from three previews: warm earth tones, not white, because plain white looked "drawn from a child on a paper". Smooth anti-aliased shapes, thin outlines on cliffs and shores, a soft shadow under cliffs, water fading from light shore to deep sea, roads at constant width with an outline. |
 | Shown | Walkable ground, cliffs, water, roads and paths, buildings, caves and tunnels, forests, large obstacles. |
-| Height | No height shading at all. |
+| Height | First decided: no height shading at all. Changed on 2026-11-09 after a Barrens test: "we might need some height shading to indicate that its a walkable area ON a mountain so to say. Not just the same kind of walkable area as the ground level". Walkable ground now gets three hard-edged gold bands by its height above the local basin floor. Blocked rock stays brown, so "high but walkable" and "can't go there" look different. |
+| Mountain barriers | 2026-11-09: "the outer skirts behave as a natural barrier between the maps". Big blocked masses are one flat, darker fill, without the fake trails their cut-off shelves used to draw. Small hills keep the old look. |
+| Toon look | 2026-11-09: "make the map art/style a LITTLE more stylized to fit the game/toon shaders more". Water in three flat bands instead of a gradient, hard cliff shadows, cel-shaded rims on barriers, 12 % more saturation on the clay palette. City maps have their own renderer and are unchanged. |
 | Cliffs | Mark drop-down edges (can jump down, can't climb up) differently from plain blocked ground. |
 | Unexplored areas | Show everything. No fog of war. |
 | Caves and tunnels | Entrance marker plus a dashed outline of the passages underneath. |
@@ -44,7 +48,7 @@ In v1:
 Out of v1:
 
 - Dungeon and raid maps (open question 3).
-- Height shading, contour lines, dark style.
+- Contour lines, dark style.
 - Hand corrections per zone.
 - Public release.
 
@@ -58,7 +62,9 @@ Map classes and how they look (exact colors chosen during the Durotar milestone)
 |---|---|
 | Walkable ground | Pale beige |
 | Forest | Soft green over walkable ground |
+| High walkable ground | Three gold bands, starting 45, 85 and 130 yards above the local basin floor |
 | Blocked (too steep) | Darker gray-beige |
+| Mountain barrier | One flat brown mass with cel-shaded rims |
 | Drop-down edge | Ledge line on the high side, so you see where you can jump down |
 | Large obstacle | Same as blocked |
 | Water | Soft blue |
@@ -157,6 +163,8 @@ Facts confirmed in the spike:
 - Zephras Isle (map 2991) floats in Skywall. Its map has no water data, only a map-wide ocean type and flat filler terrain at about 1.5 yards. On that map the Skywall area (17221), area 0 and the flat filler are drawn as pale sky. UI map 2665 has area 0, so all of its land counts as in zone.
 - Forest is measured as canopy cover, not tree count. Each tree stamps a disc as wide as its model's bounding box (MD20 offset 160), capped at 30 yards, and forest needs 40 % cover over at least 400 cells (about 7000 square yards). Stranglethorn's few giant trees and Durotar's many small palms both come out right, and single trees are dropped.
 - Drop-down edges: dry ground next to a cliff band that sits at least 3 yards above the band's average height marks the cliff's top. That side gets a heavier line.
+- Mountain barriers (`barrier_mask`): a flood fill from the largest walkable area, over the slope mask from before gaps are closed, because closing seals real passes. Water, bridges and buildings count as passable. A cut-off pocket still counts as reachable if it holds a road, building or cave entrance, or if it does not sit more than `LEDGE_RISE` above the ground around it, since players can always drop down (Razorfen Downs is 39 yards below its surroundings). Blocked ground plus the remaining pockets becomes a barrier when the mass has at least 10000 cells or crosses the zone border. `test_barrier.py` is the self-check.
+- Height bands (`height_above_floor`): the floor is the 20th percentile of walkable ground within about 830 yards. A relative floor keeps a basin that slowly rises across a zone plain. Tuned on the Barrens (28 % of walkable ground gets a band) and Durotar (3 %).
 - Cave names come from `WMOAreaTable` via the WMO's ID (MOHD offset 32) and the placement's name set (MODF offset 60). Example: model 648 with name set 3 is Burning Blade Coven, with name set 2 it is Skull Rock.
 
 ### Addon (`addons/ClearMap/`, from `templates/ForeverAddonTemplate`)
