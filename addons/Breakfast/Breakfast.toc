@@ -1,0 +1,12 @@
+## Interface: 16001
+## Title: Breakfast
+## Notes: Shows your food, drinks, potions and other consumables on their own clickable bar.
+## Author: Tautellini
+## IconTexture: Interface\AddOns\Breakfast\Media\icon
+## Version: 1.0.0
+## SavedVariables: BreakfastDB
+
+Logic.lua
+Locales.lua
+Settings.lua
+Breakfast.lua
