@@ -9,7 +9,8 @@ WorldLight makes the world of WoW Forever brighter or darker depending on whethe
 *   Separate brightness for day and night, from -100 (darker) to +100 (brighter)
 *   Fades out indoors and in dungeons and raids, where the game has no day or night.
 *   Brightening uses a moonlight color tint by default. Pick any color you like in the settings.
-*   Follows the server's own day and night, the same signal that drives the sun and moon icon on the minimap, so it matches your region
+*   Night and day start at the realm time hours you choose, by default night from 20:00 to 6:00
+*   Or follows the server's own day and night, the same signal that drives the sun and moon icon on the minimap
 *   Smooth fade between day and night, with adjustable length
 
 ***

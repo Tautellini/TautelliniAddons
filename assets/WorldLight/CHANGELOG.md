@@ -4,6 +4,7 @@
 
 **New**
 - Icon in the in-game addon list.
+- "Custom day and night times" with a start hour for night and day in realm time. On by default, with night from 20:00 to 6:00. Turn it off to follow the server's own switch as before.
 
 ## 1.0.2
 

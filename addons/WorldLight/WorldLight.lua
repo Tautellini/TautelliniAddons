@@ -21,10 +21,22 @@ light:SetColorTexture(1, 1, 1)
 light:SetBlendMode("ADD")
 light:SetAlpha(0)
 
+-- The server's phase, kept apart from ns.isDay so custom times never record a server flip
+local serverIsDay
+
 local function Update()
     local db = ns.db
-    ns.isDay = C_DateAndTime.IsDayTime()
-    ns.value = db.enabled and ns.ComputeValue(ns.isDay, GetServerTime(), db.lastFlip, db) or 0
+    local now, flip = GetServerTime(), db.lastFlip
+    serverIsDay = C_DateAndTime.IsDayTime()
+    ns.isDay = serverIsDay
+    if db.customTimes then
+        local hour, minute = GetGameTime()
+        local minutes
+        ns.isDay, minutes = ns.ClockPhase(hour * 60 + minute, db)
+        -- The clock says when the phase started, so the fade is right even after a login
+        flip = { time = now - minutes * 60, isDay = ns.isDay }
+    end
+    ns.value = db.enabled and ns.ComputeValue(ns.isDay, now, flip, db) or 0
     local darkAlpha, lightAlpha = ns.ToAlphas(ns.value)
     dark:SetAlpha(darkAlpha)
     light:SetColorTexture(ns.ParseColor(db.lightColor))
@@ -82,7 +94,7 @@ end
 
 function events:DIEL_CYCLE_CHANGED(isDayTime)
     -- Only a real change starts a fade, in case the event repeats the current state
-    if ns.isDay ~= nil and isDayTime ~= ns.isDay then
+    if serverIsDay ~= nil and isDayTime ~= serverIsDay then
         local hour, minute = GetGameTime()
         ns.db.lastFlip = { time = GetServerTime(), isDay = isDayTime, realmTime = ("%02d:%02d"):format(hour, minute) }
     end
@@ -107,13 +119,15 @@ end
 
 local function PrintStatus()
     local hour, minute = GetGameTime()
+    local custom = ns.db.customTimes
     local flip = ns.db.lastFlip
     local indoors, inInstance = IsIndoors(), IsInInstance()
-    print(("WorldLight: %s, realm time %02d:%02d, %s, value %.0f, %s%s%s"):format(
-        ns.db.enabled and "on" or "off", hour, minute, ns.isDay and "day" or "night", ns.value or 0,
+    print(("WorldLight: %s, realm time %02d:%02d, %s (%s), value %.0f, %s%s%s"):format(
+        ns.db.enabled and "on" or "off", hour, minute, ns.isDay and "day" or "night",
+        custom and ("night %d:00 to %d:00"):format(ns.db.nightStart, ns.db.dayStart) or "server", ns.value or 0,
         inInstance and "in an instance" or indoors and "indoors" or "outdoors",
         ns.ShowsTint(indoors, inInstance, ns.db) and "" or ", tint off here",
-        flip and flip.realmTime and (", last switch to %s at %s"):format(flip.isDay and "day" or "night", flip.realmTime) or ""))
+        flip and flip.realmTime and (", last server switch to %s at %s"):format(flip.isDay and "day" or "night", flip.realmTime) or ""))
 end
 
 SLASH_WORLDLIGHT1 = "/worldlight"

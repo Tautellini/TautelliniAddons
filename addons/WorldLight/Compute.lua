@@ -12,6 +12,10 @@ ns.defaults = {
     tintIndoors = false,
     tintInstances = false,
     placeFadeSeconds = 2,
+    -- Realm time hours. On by default because the sky already gets darker before the server flag flips.
+    customTimes = true,
+    nightStart = 20,
+    dayStart = 6,
 }
 
 ns.ranges = {
@@ -19,6 +23,8 @@ ns.ranges = {
     night = { -100, 100 },
     fadeMinutes = { 0, 180 },
     placeFadeSeconds = { 0, 10 },
+    nightStart = { 0, 23 },
+    dayStart = { 0, 23 },
 }
 
 -- shortcut: strongest tint at -100 and +100 is a guess, tune it in game
@@ -56,6 +62,16 @@ function ns.ComputeValue(isDay, now, lastFlip, db)
     end
     local from = isDay and db.night or db.day
     return from + (target - from) * progress
+end
+
+-- Day or night from the realm clock and the configured hours. Returns isDay and the minutes
+-- since that phase started. Equal hours mean it is always night.
+function ns.ClockPhase(minuteOfDay, db)
+    local sinceDay = (minuteOfDay - db.dayStart * 60) % 1440
+    if sinceDay < (db.nightStart - db.dayStart) * 60 % 1440 then
+        return true, sinceDay
+    end
+    return false, (minuteOfDay - db.nightStart * 60) % 1440
 end
 
 -- Whether the tint shows at the player's location. In an instance only the instance

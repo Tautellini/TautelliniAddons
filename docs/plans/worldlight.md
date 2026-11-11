@@ -20,7 +20,9 @@ Research result, 2026-11-05:
 - Forever has a server flag for day and night that Midnight does not have. `C_DateAndTime.IsDayTime()` returns it and the `DIEL_CYCLE_CHANGED` event (payload `isDayTime`) fires when it flips. Blizzard's own minimap sun and moon icon uses exactly this (`Blizzard_Minimap/Camelot/Diel.lua`).
 - The only community measurement of the light curve says: full night 00:00 to 06:00, dawn 06:00 to 12:00, full day 12:00 to 18:00, dusk 18:00 to 24:00, with light changing linearly. This is unconfirmed.
 
-Decision: WorldLight follows the server flag instead of configured hours. It is always right for the player's region, and it keeps working if Blizzard changes the cycle length or gives Oceania its own clock. This replaces the sunrise and sunset settings from the first draft of this spec.
+Update 2026-11-10: the sky gets darker before the flag flips, so configured hours are back as "Custom day and night times". They are on by default with night from 20:00 to 6:00 realm time. The server flag is the fallback when the setting is off.
+
+Original decision: WorldLight follows the server flag instead of configured hours. It is always right for the player's region, and it keeps working if Blizzard changes the cycle length or gives Oceania its own clock. This replaces the sunrise and sunset settings from the first draft of this spec.
 
 ## Scope
 
@@ -37,7 +39,6 @@ In v1:
 Out of v1:
 
 - Changing the `Gamma`, `Brightness` or `Contrast` settings.
-- Configured sunrise and sunset hours. The server decides.
 - Colored tints, for example a blue moonlight look. Candidate for v2.
 - Per-character settings. Candidate for v2.
 - Rules for weather, specific zones or the moon.

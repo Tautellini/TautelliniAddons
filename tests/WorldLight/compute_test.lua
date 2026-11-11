@@ -70,4 +70,32 @@ assert(ns.ShowsTint(true, false, place) == false)
 local fresh = ns.Sanitize({ placeFadeSeconds = 99, tintIndoors = "yes" })
 assert(fresh.placeFadeSeconds == 10 and fresh.tintIndoors == false and fresh.tintInstances == false)
 
+-- Custom times: night from 20:00 to 06:00 by default, boundaries are exact
+local clock = ns.Sanitize({})
+assert(clock.customTimes == true and clock.nightStart == 20 and clock.dayStart == 6)
+local isDay, since = ns.ClockPhase(19 * 60 + 59, clock)
+assert(isDay == true and since == 13 * 60 + 59)
+isDay, since = ns.ClockPhase(20 * 60, clock)
+assert(isDay == false and since == 0)
+isDay, since = ns.ClockPhase(5 * 60 + 59, clock)
+assert(isDay == false and since == 9 * 60 + 59)
+isDay, since = ns.ClockPhase(6 * 60, clock)
+assert(isDay == true and since == 0)
+
+-- Half an hour into the night, the clock drives a half fade
+isDay, since = ns.ClockPhase(20 * 60 + 30, clock)
+assert(ns.ComputeValue(isDay, now, { time = now - since * 60, isDay = isDay }, clock) == 15)
+
+-- A day that wraps past midnight, from 22:00 to 04:00
+local wrapped = ns.Sanitize({ dayStart = 22, nightStart = 4 })
+assert(ns.ClockPhase(23 * 60, wrapped) == true)
+assert(ns.ClockPhase(3 * 60 + 59, wrapped) == true)
+assert(ns.ClockPhase(4 * 60, wrapped) == false)
+assert(ns.ClockPhase(21 * 60 + 59, wrapped) == false)
+
+-- Equal hours mean always night, out of range hours are clamped
+local same = ns.Sanitize({ dayStart = 8, nightStart = 8 })
+assert(ns.ClockPhase(8 * 60, same) == false and ns.ClockPhase(7 * 60 + 59, same) == false)
+assert(ns.Sanitize({ nightStart = 99 }).nightStart == 23)
+
 print("compute_test: all passed")
