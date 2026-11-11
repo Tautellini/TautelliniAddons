@@ -8,7 +8,7 @@ local printed = {}
 
 -- Protected frames (the secure buttons and their parent bar) must not be changed in combat
 local PROTECTED_CALLS = { SetAttribute = true, Show = true, Hide = true, SetPoint = true, ClearAllPoints = true,
-    SetSize = true, StartMoving = true }
+    SetSize = true, StartMoving = true, StopMovingOrSizing = true }
 
 local Widget = {}
 Widget.__index = function(self, key)
@@ -232,6 +232,8 @@ settings.drink:SetValue(false)
 settings.perRow:SetValue(3)
 assert(ButtonFor(103), "a setting changed the bar in combat")
 handle.scripts.OnDragStart(handle)
+-- The mouse release still fires after a refused drag
+handle.scripts.OnDragStop(handle)
 assert(not bar.moving and printed[#printed] == "Breakfast: Die Leiste wird nach dem Kampf aktualisiert.")
 
 -- After the fight everything catches up: used up items gone, drinks off, three per row

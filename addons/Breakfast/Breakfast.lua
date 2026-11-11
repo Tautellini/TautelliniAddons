@@ -41,7 +41,12 @@ handle:SetScript("OnDragStart", function()
     end
     bar:StartMoving()
 end)
-handle:SetScript("OnDragStop", StopMoving)
+handle:SetScript("OnDragStop", function()
+    -- A release in combat follows a refused drag, or one that PLAYER_REGEN_DISABLED already ended
+    if not InCombatLockdown() then
+        StopMoving()
+    end
+end)
 
 -- itemID -> { id, group, level, icon }, or false for items the bar never shows
 local known = {}

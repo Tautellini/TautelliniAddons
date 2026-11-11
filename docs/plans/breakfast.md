@@ -55,6 +55,7 @@ Folder `addons/Breakfast/`, started from `templates/ForeverAddonTemplate`. Plain
 | `Settings.lua` | Settings panel, same pattern as `addons/WorldLight/Settings.lua`. |
 | `Locales.lua` | enUS strings with a deDE table on top. |
 | `tests/Breakfast/logic_test.lua` | Asserts for sorting, grouping and grid positions. |
+| `tests/Breakfast/bar_test.lua` | Runs the whole addon against a stubbed WoW API on a German client. It fails when a protected frame is touched in combat. |
 
 Data flow:
 

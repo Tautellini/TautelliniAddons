@@ -25,6 +25,9 @@ Find them under Options > AddOns > WorldLight.
 | Day brightness    |0          |-100 darker to +100 brighter during the day                                     |
 | Night brightness  |+30        |-100 darker to +100 brighter at night                                           |
 | Light color       |moonlight  |color of the light added when brightening                                       |
+| Custom times      |on         |night and day start at the hours below, off follows the server's own switch     |
+| Night starts      |20         |realm time hour at which the night begins                                       |
+| Day starts        |6          |realm time hour at which the day begins                                         |
 | Fade length       |60 minutes |how long the change takes after day turns into night and back                   |
 | Tint indoors      |off        |keep the tint inside buildings and caves                                        |
 | Tint in instances |off        |keep the tint in dungeons and raids                                             |
