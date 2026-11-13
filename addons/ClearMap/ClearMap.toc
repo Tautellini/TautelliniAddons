@@ -4,6 +4,7 @@
 ## Author: Tautellini
 ## IconTexture: Interface\AddOns\ClearMap\Media\icon
 ## Version: 1.1.0
+## X-Curse-Project-ID: 1787961
 ## SavedVariables: ClearMapDB
 
 Tiles\Tiles.lua

@@ -229,6 +229,20 @@ Findings from WorldLight, tested in game on Forever:
 
 ## Releasing
 
+### This repo
+
+1. Set `## Version` in the TOC and rename "Unreleased" in `assets/<Name>/CHANGELOG.md` to that version.
+2. Commit, then push the tag `<Name>-<version>`, for example `WorldLight-1.1.0`.
+3. `.github/workflows/release.yml` runs `tools/release.py`, which builds the zip and uploads it to CurseForge with that changelog section as release notes.
+
+- The TOC needs `## X-Curse-Project-ID`. A new addon needs its CurseForge project created by hand first.
+- The script stops when the tag and the TOC version differ, when the changelog has no section for the version, or when a file listed in the TOC is missing.
+- ClearMap is released from the local machine, because its tiles are not in git: set `CF_API_KEY`, then run `python tools/release.py ClearMap --upload`. The workflow ignores `ClearMap-` tags, so the tag is only a marker there.
+- `python tools/release.py <Name>` without `--upload` is a dry run. It builds the zip and prints the release notes.
+- The CurseForge description page (`curseforge.md`) is still pasted by hand.
+
+### General
+
 - The BigWigs packager (`release.sh` and the `BigWigsMods/packager` GitHub Action) supports Forever. It maps any `16xxx` Interface to the `forever` game type and accepts `camelot` as an alias.
 - Git tags set the version. The packager replaces `@project-version@` in the TOC.
 - Uploads need `CF_API_KEY` for CurseForge and `WAGO_API_TOKEN` for Wago as repository secrets.

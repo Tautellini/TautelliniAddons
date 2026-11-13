@@ -1,0 +1,23 @@
+name: Release to CurseForge
+
+# Push a tag like WorldLight-1.1.0 to publish that addon.
+# ClearMap is not released here. Its tiles are not in git, so run tools/release.py on the local machine.
+on:
+  push:
+    tags:
+      - "*-[0-9]*.[0-9]*.[0-9]*"
+      - "!ClearMap-*"
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and upload
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          TAG: ${{ github.ref_name }}
+        run: python3 tools/release.py "${TAG%-*}" --tag "$TAG" --upload
