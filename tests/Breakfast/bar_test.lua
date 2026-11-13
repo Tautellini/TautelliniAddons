@@ -65,6 +65,8 @@ UIParent = NewWidget("Frame")
 GameTooltip = NewWidget("GameTooltip")
 function GameTooltip_Hide() end
 function InCombatLockdown() return inCombat end
+local shiftDown = false
+function IsShiftKeyDown() return shiftDown end
 function GetLocale() return "deDE" end
 function print(...) printed[#printed + 1] = table.concat({ ... }, " ") end
 SlashCmdList = {}
@@ -197,7 +199,8 @@ assert(Shown() == "item:100x3 item:101x24 item:102x7 item:103x10 item:104x5 item
 -- Six buttons, five spacings and a gap before each of the four later groups
 assert(bar.width == 6 * 36 + 5 * 2 + 4 * 8 and bar.height == 36)
 local potion = ButtonFor(104)
-assert(potion.attributes.type == "item" and potion.attributes.useOnKeyDown == false)
+-- Only the left button uses the item, so a right click can never eat or drink by accident
+assert(potion.attributes.type1 == "item" and potion.attributes.type == nil and potion.attributes.useOnKeyDown == false)
 assert(potion.icon.texture == 9104 and potion.cooldown.cooldownStart == 500 and potion.width == 36)
 
 -- The elixir's data arrives. Other items' data does not trigger a rescan.
@@ -254,6 +257,33 @@ settings.locked:SetValue(true)
 assert(handle.shown == false)
 settings.locked:SetValue(false)
 assert(handle.shown == true)
+
+-- Shift + right click hides an item for good. Other clicks do not.
+local bandage = ButtonFor(105)
+bandage.scripts.PostClick(bandage, "RightButton")
+bandage.scripts.PostClick(bandage, "LeftButton")
+shiftDown = true
+bandage.scripts.PostClick(bandage, "LeftButton")
+assert(ButtonFor(105) and next(BreakfastDB.hidden) == nil)
+bandage.scripts.PostClick(bandage, "RightButton")
+assert(not ButtonFor(105) and BreakfastDB.hidden[105])
+assert(printed[#printed] == "Breakfast: Item 105 ist ausgeblendet. /breakfast reset zeigt alle ausgeblendeten Gegenstände wieder.")
+Fire("BAG_UPDATE_DELAYED")
+assert(not ButtonFor(105))
+
+-- Hiding in combat takes effect after the fight
+inCombat = true
+local scroll = ButtonFor(109)
+scroll.scripts.PostClick(scroll, "RightButton")
+assert(ButtonFor(109) and BreakfastDB.hidden[109])
+inCombat = false
+Fire("PLAYER_REGEN_ENABLED")
+assert(not ButtonFor(109))
+shiftDown = false
+
+-- /breakfast reset brings hidden items back
+SlashCmdList.BREAKFAST(" Reset ")
+assert(ButtonFor(105) and ButtonFor(109) and next(BreakfastDB.hidden) == nil)
 
 -- Empty bags: no buttons, the bar keeps a valid size
 for bag = 0, 4 do bags[bag] = {} end

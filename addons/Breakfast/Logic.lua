@@ -39,6 +39,10 @@ function ns.Sanitize(db)
         or type(pos[3]) ~= "number" or type(pos[4]) ~= "number" then
         db.pos = nil
     end
+    -- Items the player hid by hand, as itemID -> true
+    if type(db.hidden) ~= "table" then
+        db.hidden = {}
+    end
     return db
 end
 
@@ -75,12 +79,12 @@ local function Before(a, b)
     return a.id < b.id
 end
 
--- Takes items as { id, group, level }. Returns the items of enabled groups in display order,
+-- Takes items as { id, group, level }. Returns the items of enabled groups in display order, without hidden items,
 -- each with x and y as offsets from the bar's top left corner, plus the bar's width and height.
 function ns.Arrange(items, db)
     local list = {}
     for _, item in ipairs(items) do
-        if db[item.group] then
+        if db[item.group] and not db.hidden[item.id] then
             list[#list + 1] = item
         end
     end

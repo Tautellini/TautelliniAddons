@@ -4,6 +4,7 @@
 ## Author: Tautellini
 ## IconTexture: Interface\AddOns\Breakfast\Media\icon
 ## Version: 1.0.0
+## X-Curse-Project-ID: 1802633
 ## SavedVariables: BreakfastDB
 
 Logic.lua

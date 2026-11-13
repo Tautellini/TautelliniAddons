@@ -108,13 +108,26 @@ local function Scan()
 end
 
 local buttons = {}
+local Rebuild
+
+-- Shift + right click hides an item for good. The right button has no secure action.
+local function HideOnShiftRightClick(self, mouseButton)
+    if mouseButton ~= "RightButton" or not IsShiftKeyDown() or not self.itemID then return end
+    ns.db.hidden[self.itemID] = true
+    print(ns.L.hidden:format(C_Item.GetItemInfo(self.itemID) or self.itemID))
+    if InCombatLockdown() then
+        print(ns.L.combat)
+    end
+    Rebuild()
+end
 
 local function NewButton()
     local button = CreateFrame("Button", nil, bar, "SecureActionButtonTemplate")
-    button:SetAttribute("type", "item")
+    button:SetAttribute("type1", "item")
     -- Use on release whatever the player's key down setting says, so one registration is enough
     button:SetAttribute("useOnKeyDown", false)
-    button:RegisterForClicks("LeftButtonUp")
+    button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    button:SetScript("PostClick", HideOnShiftRightClick)
     button:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
 
     button.icon = button:CreateTexture(nil, "BACKGROUND")
@@ -127,6 +140,7 @@ local function NewButton()
     button:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetItemByID(self.itemID)
+        GameTooltip:AddLine(ns.L.hideHint, 0.6, 0.6, 0.6)
         GameTooltip:Show()
     end)
     button:SetScript("OnLeave", GameTooltip_Hide)
@@ -156,7 +170,7 @@ local function RefreshCooldowns()
     end
 end
 
-local function Rebuild()
+function Rebuild()
     handle:SetShown(not ns.db.locked)
     if InCombatLockdown() then
         -- PLAYER_REGEN_ENABLED rebuilds. Until then used up items stay greyed out with count 0.
@@ -227,6 +241,12 @@ for _, event in ipairs({
 end
 
 SLASH_BREAKFAST1 = "/breakfast"
-SlashCmdList.BREAKFAST = function()
-    Settings.OpenToCategory(ns.category:GetID())
+SlashCmdList.BREAKFAST = function(msg)
+    if msg:lower():match("^%s*reset%s*$") then
+        ns.db.hidden = {}
+        print(ns.L.reset)
+        Rebuild()
+    else
+        Settings.OpenToCategory(ns.category:GetID())
+    end
 end

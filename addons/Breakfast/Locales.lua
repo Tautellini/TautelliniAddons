@@ -15,6 +15,9 @@ local L = {
     locked = "Lock position",
     lockedTip = "Hides the drag handle above the bar. Unlock to move the bar by its handle.",
     combat = "Breakfast: the bar updates when the fight ends.",
+    hideHint = "Shift + right click: hide this item",
+    hidden = "Breakfast: %s is hidden. /breakfast reset shows all hidden items again.",
+    reset = "Breakfast: all hidden items are shown again.",
 }
 
 if GetLocale() == "deDE" then
@@ -32,6 +35,9 @@ if GetLocale() == "deDE" then
     L.locked = "Position sperren"
     L.lockedTip = "Blendet den Griff über der Leiste aus. Entsperren, um die Leiste am Griff zu verschieben."
     L.combat = "Breakfast: Die Leiste wird nach dem Kampf aktualisiert."
+    L.hideHint = "Umschalt + Rechtsklick: Diesen Gegenstand ausblenden"
+    L.hidden = "Breakfast: %s ist ausgeblendet. /breakfast reset zeigt alle ausgeblendeten Gegenstände wieder."
+    L.reset = "Breakfast: Alle ausgeblendeten Gegenstände werden wieder angezeigt."
 end
 
 ns.L = L

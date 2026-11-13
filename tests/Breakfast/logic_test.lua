@@ -43,6 +43,12 @@ assert(width == 82 and height == 112)
 -- A group that is turned off is left out, an empty bar has no size
 list = ns.Arrange(items, ns.Sanitize({ food = false }))
 assert(#list == 2 and list[1].id == 9 and list[2].id == 4)
+-- Hidden items are left out, a broken hide list is replaced
+local hiding = ns.Sanitize({ hidden = "all" })
+assert(next(hiding.hidden) == nil)
+hiding.hidden[2] = true
+list = ns.Arrange(items, hiding)
+assert(#list == 4 and list[2].id == 1)
 list, width, height = ns.Arrange({}, ns.Sanitize({}))
 assert(#list == 0 and width == 0 and height == 0)
 

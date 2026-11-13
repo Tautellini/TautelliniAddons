@@ -12,6 +12,7 @@ Breakfast shows every consumable you carry in WoW Forever as a clickable button 
 *   Updates on its own when you loot or use up items
 *   Move the bar anywhere and lock it
 *   Turn off the groups you do not need
+*   Hide single items with Shift + right click. <code>/breakfast reset</code> brings them back
 *   English and German settings
 
 ***

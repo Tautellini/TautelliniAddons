@@ -16,10 +16,10 @@ In v1:
 - Wrapping grid, movable, lockable.
 - Settings in Blizzard's panel (Options > AddOns), saved account wide.
 - English and German text for the settings.
+- A hide list for single items, added on 2026-11-11 after odd scrolls showed up on the bar.
 
 Out of v1:
 
-- A hide list for single items.
 - "Best item per group" mode.
 - Key bindings for buttons.
 - Hiding in combat or on mouseover.
@@ -34,7 +34,7 @@ Out of v1:
 - Group order: buff food, food, drinks, potions, elixirs and flasks, bandages and scrolls. Inside a group the highest item level comes first. Equal levels sort by item ID so the order never flickers.
 - Layout is a wrapping grid. Buttons per row is a setting, default 12. A group continues where the last one ended, with a small gap between groups.
 - Each button shows the icon, the total count across all bags and the cooldown swipe.
-- Left click uses the item. There is no other click action in v1.
+- Left click uses the item. Shift + right click hides that item for good. The tooltip says so. `/breakfast reset` shows all hidden items again.
 - Looting a new item adds a button. Using up an item removes its button.
 - In combat the game blocks adding and removing clickable buttons. So during a fight:
   - An item that runs out stays in place, greyed out with count 0, and goes away when the fight ends.
@@ -93,6 +93,7 @@ All settings are account wide in `BreakfastDB`.
 | Buttons per row | 12 | 1 to 24 |
 | Lock position | off | on or off |
 | Position | screen center | set by dragging |
+| Hidden items | none | Shift + right click, `/breakfast reset` |
 
 ## Performance notes
 
