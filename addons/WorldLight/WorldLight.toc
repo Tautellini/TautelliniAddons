@@ -3,7 +3,7 @@
 ## Notes: Brightens or darkens the game world by day and night. The UI stays untouched.
 ## Author: Tautellini
 ## IconTexture: Interface\AddOns\WorldLight\Media\icon
-## Version: 1.0.2
+## Version: 1.1.0
 ## X-Curse-Project-ID: 1785885
 ## SavedVariables: WorldLightDB
 
